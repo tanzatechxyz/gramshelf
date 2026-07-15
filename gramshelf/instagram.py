@@ -180,6 +180,7 @@ class InstaloaderClient:
         self.media_dir = media_dir
         self.loader: Any | None = None
         self.logged_in_username: str | None = None
+        self._author_cache: dict[int, str] = {}
 
     def _build_loader(self) -> Any:
         return _build_loader(self.media_dir)
@@ -212,6 +213,28 @@ class InstaloaderClient:
 
         profile = Profile.from_username(self.loader.context, self.logged_in_username)
         return profile.get_saved_posts()
+
+    def resolve_author(self, post: Any) -> str:
+        """Resolve an owner without forcing a full Post metadata request."""
+        if self.loader is None:
+            raise RuntimeError("Instagram client is not connected")
+        from instaloader import Profile
+
+        from .post_metadata import author, cached_author, owner_id
+
+        username = cached_author(post)
+        if username != "unknown":
+            return username
+        profile_id = owner_id(post)
+        if profile_id is not None:
+            if profile_id not in self._author_cache:
+                try:
+                    resolved = Profile.from_id(self.loader.context, profile_id).username
+                    self._author_cache[profile_id] = str(resolved) if resolved else "unknown"
+                except Exception:
+                    self._author_cache[profile_id] = author(post)
+            return self._author_cache[profile_id]
+        return author(post)
 
     def download_post(self, post: Any, shortcode: str) -> list[dict[str, Any]]:
         if self.loader is None:

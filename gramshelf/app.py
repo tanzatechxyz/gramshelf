@@ -260,6 +260,9 @@ def create_app(
             "pending_username": pending_username,
             "api_token": str(values.get("api_token", "")),
             "next_scheduled_sync": scheduler.next_run_at(),
+            "legacy_import_path": str(config.import_dir),
+            "legacy_import_available": config.import_dir.is_dir(),
+            "unknown_author_count": database.count_unknown_authors(),
         }
 
     def session_payload(request: Request) -> dict[str, Any]:
@@ -519,11 +522,46 @@ def create_app(
         if stop_requested:
             flash(
                 request,
-                "Stop requested. The current item will finish before synchronization stops.",
+                "Stop requested. The current item will finish before the active job stops.",
                 "warning",
             )
         else:
-            flash(request, "No synchronization is currently running.", "warning")
+            flash(request, "No synchronization or import is currently running.", "warning")
+        return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
+
+    @app.post("/settings/import", include_in_schema=False, name="legacy_import_web")
+    def legacy_import_web(
+        request: Request,
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        try:
+            started, run = sync_manager.start_import()
+            if started:
+                flash(request, f"Legacy import #{run.get('id')} started.", "success")
+            else:
+                flash(request, "Another synchronization or import is already running.", "warning")
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+        return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
+
+    @app.post(
+        "/settings/authors/repair",
+        include_in_schema=False,
+        name="repair_authors_web",
+    )
+    def repair_authors_web(
+        request: Request,
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        started, run = sync_manager.start_author_repair()
+        if started:
+            flash(request, f"Author repair #{run.get('id')} started.", "success")
+        else:
+            flash(request, "Another synchronization or import is already running.", "warning")
         return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
 
     @app.get("/settings", response_class=HTMLResponse, include_in_schema=False, name="settings_page")
@@ -666,6 +704,9 @@ def create_app(
             "media_files": len(media_files),
             "free_space": disk.free,
             "item_count": database.count_items(),
+            "unknown_author_count": database.count_unknown_authors(),
+            "legacy_import_path": str(config.import_dir),
+            "legacy_import_available": config.import_dir.is_dir(),
             "session": session_payload(request),
             "next_scheduled_sync": scheduler.next_run_at(),
             "recent_errors": database.recent_errors(limit=20),
@@ -889,6 +930,31 @@ def create_app(
         stop_requested, run = sync_manager.stop()
         return {"stop_requested": stop_requested, "run": run}
 
+    @app.post(
+        "/api/v1/import/legacy",
+        response_model=SyncStartOut,
+        status_code=202,
+        tags=["Import"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    def api_legacy_import_start() -> dict[str, Any]:
+        try:
+            started, run = sync_manager.start_import()
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"started": started, "run": run}
+
+    @app.post(
+        "/api/v1/authors/repair",
+        response_model=SyncStartOut,
+        status_code=202,
+        tags=["Items"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    def api_repair_authors_start() -> dict[str, Any]:
+        started, run = sync_manager.start_author_repair()
+        return {"started": started, "run": run}
+
     @app.get(
         "/api/v1/sync/status",
         response_model=SyncStatusOut,
@@ -963,6 +1029,9 @@ def create_app(
             "media_files": sum(1 for path in config.media_dir.rglob("*") if path.is_file()),
             "free_bytes": disk.free,
             "item_count": database.count_items(),
+            "unknown_author_count": database.count_unknown_authors(),
+            "legacy_import_path": str(config.import_dir),
+            "legacy_import_available": config.import_dir.is_dir(),
             "session": session_payload(request),
             "next_scheduled_sync": scheduler.next_run_at(),
             "recent_errors": database.recent_errors(limit=20),

@@ -9,5 +9,6 @@ htmlcov
 tests
 data
 media
+import
 dist
 build

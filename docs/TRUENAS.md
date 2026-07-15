@@ -11,6 +11,8 @@ Create two datasets, for example:
 
 Grant read/write/execute access on both datasets to UID and GID `568` (the non-root user built into the image). Keep the session/database dataset private; it contains the API token, cookie signing key, and Instagram session.
 
+If importing an old Instaloader archive, identify its existing dataset or folder. It only needs to be readable by UID `568`; mount it read-only and keep the originals until the import has been verified.
+
 ## Custom app values
 
 Use these values when installing a custom image:
@@ -24,6 +26,7 @@ Use these values when installing a custom image:
 | Run as user/group | `568:568` |
 | Host path 1 | `/mnt/tank/apps/gramshelf/data` → `/data`, read/write |
 | Host path 2 | `/mnt/tank/apps/gramshelf/media` → `/media`, read/write |
+| Optional import path | Existing Instaloader archive → `/import`, read-only |
 | Health path | `/api/v1/health` |
 
 No environment variables are required for a direct host/port deployment.
@@ -41,6 +44,8 @@ services:
     volumes:
       - /mnt/tank/apps/gramshelf/data:/data
       - /mnt/tank/apps/gramshelf/media:/media
+      # Add only while importing an existing archive:
+      # - /mnt/tank/archives/instaloader:/import:ro
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -48,6 +53,8 @@ services:
 ```
 
 After deployment, open `http://TRUENAS_IP:30080` and complete the first-run setup.
+
+For a legacy import, add the optional mount, redeploy, then use **Settings → Archive maintenance**. GramShelf copies matching media into `/media`, reads JSON/TXT into SQLite, and leaves `/import` unchanged. Once the Activity page shows a successful import and the timeline is verified, the read-only mount can be removed.
 
 ## Reverse proxy
 

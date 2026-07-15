@@ -18,6 +18,7 @@ The administrator browser session is also accepted. JSON errors use FastAPI's st
 | `GET` | `/api/v1/status` | Version, archive count, session state, current sync, and next scheduled run |
 | `GET` | `/api/v1/items` | Chronological item list with search, filters, limit, and offset |
 | `GET` | `/api/v1/items/{id}` | One archived item and all downloaded media |
+| `POST` | `/api/v1/authors/repair` | Queue a Saved-feed scan that repairs archived `unknown` authors without downloading media |
 | `GET` | `/api/v1/instagram/session` | Saved-session and pending two-factor state |
 | `POST` | `/api/v1/instagram/session` | Upload and validate a session as multipart fields `username` and `session_file` |
 | `POST` | `/api/v1/instagram/session/login` | Create a session from JSON fields `username` and `password`; the password is not stored |
@@ -27,6 +28,7 @@ The administrator browser session is also accepted. JSON errors use FastAPI's st
 | `POST` | `/api/v1/sync` | Queue an on-demand synchronization; returns HTTP 202 |
 | `POST` | `/api/v1/sync/test` | Queue a test synchronization that downloads at most three new items |
 | `POST` | `/api/v1/sync/stop` | Request that the active synchronization stop after its current item |
+| `POST` | `/api/v1/import/legacy` | Queue a deduplicating import from the configured read-only legacy folder |
 | `GET` | `/api/v1/sync/status` | Current or most recent synchronization state |
 | `GET` | `/api/v1/sync/history` | Paginated synchronization history |
 | `GET` | `/api/v1/sync/history/{id}` | One run with its errors |
@@ -87,4 +89,22 @@ curl -X POST http://localhost:8080/api/v1/sync/stop \
   -H "Authorization: Bearer gs_REPLACE_ME"
 ```
 
-Stopping is cooperative: an in-progress Instaloader media request is allowed to finish so files are not deliberately interrupted mid-write. The response field `stop_requested` indicates whether a running synchronization accepted the request. Status reports `stopping: true` until the run finishes with status `cancelled`.
+Stopping is cooperative: an in-progress Instaloader media request is allowed to finish so files are not deliberately interrupted mid-write. The response field `stop_requested` indicates whether the active job accepted the request. Status reports `stopping: true` until the run finishes with status `cancelled`.
+
+The same stop endpoint also stops a legacy import or author-repair run after its current item. These maintenance jobs appear in the normal status and history endpoints with triggers `legacy-import` and `author-repair`.
+
+## Import and author-repair examples
+
+Mount the old Instaloader archive at the configured `GRAMSHELF_IMPORT_DIR` (default `/import`) before starting the import:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/legacy \
+  -H "Authorization: Bearer gs_REPLACE_ME"
+```
+
+The source is read-only. GramShelf copies matching media, converts JSON/TXT metadata into its database, and deduplicates by shortcode. To repair existing `unknown` authors using the current Saved feed:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/authors/repair \
+  -H "Authorization: Bearer gs_REPLACE_ME"
+```

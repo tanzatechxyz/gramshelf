@@ -11,7 +11,7 @@
     {% if sync_status.running %}
     <form action="{{ url_for('stop_sync_web') }}" method="post">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <button class="button button-danger" type="submit">Stop synchronization</button>
+      <button class="button button-danger" type="submit">Stop current job</button>
     </form>
     {% else %}
     <form action="{{ url_for('test_sync_web') }}" method="post">
@@ -30,8 +30,8 @@
 <section class="live-status" data-reload-when-sync-complete>
   <span class="pulse" aria-hidden="true"></span>
   <div>
-    <strong>{% if sync_status.stopping %}Stopping synchronization #{{ sync_status.id }}{% else %}Synchronization #{{ sync_status.id }} is running{% endif %}</strong>
-    <p>{% if sync_status.stopping %}Finishing the current item before stopping · {% endif %}{{ sync_status.discovered_count }} discovered · {{ sync_status.downloaded_count }} downloaded · {{ sync_status.skipped_count }} already archived</p>
+    <strong>{% if sync_status.stopping %}Stopping job #{{ sync_status.id }}{% else %}{{ sync_status.trigger | replace('-', ' ') | title }} #{{ sync_status.id }} is running{% endif %}</strong>
+    <p>{% if sync_status.stopping %}Finishing the current item before stopping · {% endif %}{{ sync_status.discovered_count }} discovered · {{ sync_status.downloaded_count }} {% if sync_status.trigger == 'legacy-import' %}imported or updated{% elif sync_status.trigger == 'author-repair' %}updated{% else %}downloaded{% endif %} · {{ sync_status.skipped_count }} skipped</p>
   </div>
 </section>
 {% endif %}
@@ -42,15 +42,15 @@
   <details class="run-card" {% if loop.first %}open{% endif %}>
     <summary>
       <span class="status-dot status-{{ run.status }}" aria-hidden="true"></span>
-      <span class="run-title">Run #{{ run.id }} · {{ run.trigger | title }}</span>
+      <span class="run-title">Run #{{ run.id }} · {{ run.trigger | replace('-', ' ') | title }}</span>
       <span class="run-status">{{ run.status | replace('_', ' ') | title }}</span>
       <time datetime="{{ run.started_at or '' }}">{{ (run.started_at or run.completed_at) | datetime }}</time>
     </summary>
     <div class="run-body">
       <div class="stat-grid">
         <div><strong>{{ run.discovered_count }}</strong><span>Discovered</span></div>
-        <div><strong>{{ run.downloaded_count }}</strong><span>Downloaded</span></div>
-        <div><strong>{{ run.skipped_count }}</strong><span>Duplicates</span></div>
+        <div><strong>{{ run.downloaded_count }}</strong><span>{% if run.trigger == 'legacy-import' %}Imported / updated{% elif run.trigger == 'author-repair' %}Authors updated{% else %}Downloaded{% endif %}</span></div>
+        <div><strong>{{ run.skipped_count }}</strong><span>Skipped</span></div>
         <div><strong>{{ run.error_count }}</strong><span>Errors</span></div>
       </div>
       {% if run.message %}<p class="run-message">{{ run.message }}</p>{% endif %}

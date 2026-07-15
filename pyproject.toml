@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gramshelf"
-version = "0.3.0"
+version = "0.4.0"
 description = "A small self-hosted archive for Instagram saved posts"
 readme = "README.md"
 requires-python = ">=3.11"

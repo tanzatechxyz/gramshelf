@@ -69,9 +69,16 @@ class FakeLoader:
 
 
 class FakeProfile:
+    resolved_ids: list[int] = []
+
     @classmethod
     def from_username(cls, context, username: str):
         return cls()
+
+    @classmethod
+    def from_id(cls, context, profile_id: int):
+        cls.resolved_ids.append(profile_id)
+        return SimpleNamespace(username="resolved_owner")
 
     def get_saved_posts(self):
         return [SimpleNamespace(shortcode="ABC")]
@@ -90,6 +97,7 @@ def fake_instaloader(monkeypatch):
     FakeLoader.require_two_factor = False
     FakeLoader.password_seen = None
     FakeLoader.fail_metadata_after_download = False
+    FakeProfile.resolved_ids = []
     return module
 
 
@@ -175,4 +183,21 @@ def test_download_recovers_media_written_before_metadata_failure(
 
     assert [entry["kind"] for entry in files] == ["image", "video"]
     assert all((media / entry["relative_path"]).is_file() for entry in files)
+    client.close()
+
+
+def test_author_is_resolved_from_owner_id_and_cached(
+    tmp_path: Path, fake_instaloader
+) -> None:
+    session = tmp_path / "session"
+    session.write_bytes(b"session")
+    media = tmp_path / "media"
+    media.mkdir()
+    client = InstaloaderClient("archive_user", session, media)
+    client.connect()
+    post = SimpleNamespace(_node={"owner": {"id": "42"}})
+
+    assert client.resolve_author(post) == "resolved_owner"
+    assert client.resolve_author(post) == "resolved_owner"
+    assert FakeProfile.resolved_ids == [42]
     client.close()

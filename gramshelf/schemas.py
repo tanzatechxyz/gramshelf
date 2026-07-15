@@ -106,6 +106,9 @@ class SettingsOut(BaseModel):
     pending_username: str | None
     api_token: str
     next_scheduled_sync: str | None
+    legacy_import_path: str
+    legacy_import_available: bool
+    unknown_author_count: int
 
 
 class SettingsUpdate(BaseModel):

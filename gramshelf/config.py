@@ -17,6 +17,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 class AppConfig:
     data_dir: Path
     media_dir: Path
+    import_dir: Path = Path("/import")
     host: str = "0.0.0.0"
     port: int = 8080
     root_path: str = ""
@@ -31,6 +32,7 @@ class AppConfig:
         return cls(
             data_dir=Path(os.getenv("GRAMSHELF_DATA_DIR", "/data")),
             media_dir=Path(os.getenv("GRAMSHELF_MEDIA_DIR", "/media")),
+            import_dir=Path(os.getenv("GRAMSHELF_IMPORT_DIR", "/import")),
             host=os.getenv("GRAMSHELF_HOST", "0.0.0.0"),
             port=int(os.getenv("GRAMSHELF_PORT", "8080")),
             root_path=root_path.rstrip("/"),

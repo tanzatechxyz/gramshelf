@@ -55,3 +55,15 @@ def test_sync_history_records_errors(tmp_path: Path) -> None:
     assert run is not None
     assert run["errors"][0]["shortcode"] == "ABC"
     assert database.recent_errors()[0]["message"] == "download failed"
+
+
+def test_item_metadata_can_be_repaired_by_shortcode(tmp_path: Path) -> None:
+    database = Database(tmp_path / "db.sqlite3")
+    database.initialize()
+    item_id = add_item(database, "UNKNOWN1", "unknown", "2025-01-01T00:00:00+00:00")
+
+    assert database.count_unknown_authors() == 1
+    assert database.update_item_metadata("UNKNOWN1", author="alice") is True
+    assert database.get_item(item_id)["author"] == "alice"
+    assert database.get_item_by_shortcode("UNKNOWN1")["id"] == item_id
+    assert database.count_unknown_authors() == 0

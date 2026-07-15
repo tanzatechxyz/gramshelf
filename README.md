@@ -13,6 +13,8 @@ It is designed for a single Docker container on a home server such as TrueNAS SC
 - Runs on a configurable interval or on demand from the UI and API.
 - Provides a three-item test synchronization before running a full import.
 - Lets the administrator stop a running synchronization after its current item finishes.
+- Resolves post-owner usernames from Instaloader's cached owner ID and can repair older `@unknown` items.
+- Imports a previous Instaloader archive without changing the source files.
 - Records synchronization progress, history, and per-item errors.
 - Provides an administrator login, setup flow, session management, diagnostics, and an OpenAPI-documented HTTP API.
 
@@ -20,10 +22,10 @@ GramShelf intentionally has one administrator, one Instagram account, SQLite, an
 
 ## Quick start with Docker Compose
 
-1. Create writable persistent folders. The image runs as UID/GID `568` by default (the common TrueNAS Apps user):
+1. Create writable persistent folders. The optional `import` folder is a read-only source for a previous Instaloader archive. The image runs as UID/GID `568` by default (the common TrueNAS Apps user):
 
    ```bash
-   mkdir -p data media
+   mkdir -p data media import
    sudo chown -R 568:568 data media
    ```
 
@@ -54,7 +56,17 @@ Complete any Instagram prompt, then upload Instaloader's generated `session-YOUR
 
 Session files contain authentication cookies. Treat them as secrets and only upload a file you generated yourself. Instagram is an unofficial and changeable integration: sessions can expire, Saved-feed access can break when Instagram changes its private interfaces, and aggressive schedules can cause rate limits. The default 12-hour interval is deliberately conservative.
 
-If Instagram refuses an optional full-metadata lookup after media has downloaded, GramShelf now archives the item from the metadata already present in the Saved-feed response. Missing fields use safe fallbacks instead of leaving downloaded media invisible.
+If a Saved-feed item only includes the owner's numeric ID, GramShelf asks Instaloader to resolve that profile directly instead of forcing the failing full-Post metadata request. If an owner still cannot be resolved, the media remains archived and the repair tool can be run later.
+
+## Import an existing Instaloader archive
+
+Mount the root of the previous archive read-only at `/import`, then open **Settings → Archive maintenance → Import legacy archive**. With Compose, set `GRAMSHELF_IMPORT_PATH` to the host path in `.env`; the supplied Compose file mounts it at `/import:ro`.
+
+The importer recursively reads Instaloader `.json` and `.json.xz` Post metadata. For each metadata basename it finds matching `.txt`, PNG/JPG/WebP, MP4/MOV/M4V, and numbered carousel files in the same folder. Media is copied into GramShelf's `/media/<shortcode>/` folder; author, caption, dates, URL, and type are stored in SQLite. JSON and TXT are consumed as metadata rather than copied. The original archive is never deleted or modified.
+
+Items are deduplicated by Instagram shortcode. If a shortcode already exists, the importer does not copy a second media set; it only fills a missing author or caption. You can safely run the import again. Progress, errors, and stopping use the normal Activity page.
+
+To repair items already displayed as `@unknown`, use **Repair unknown authors** on the same Settings panel. This scans the currently Saved feed through Instaloader and updates matching archived rows without downloading media again. Posts no longer present in Saved can still be repaired from their legacy JSON during import.
 
 ## Container configuration
 
@@ -62,6 +74,7 @@ If Instagram refuses an optional full-metadata lookup after media has downloaded
 | --- | --- | --- |
 | `GRAMSHELF_DATA_DIR` | `/data` | SQLite database, secret key, and Instagram session |
 | `GRAMSHELF_MEDIA_DIR` | `/media` | Downloaded images and videos |
+| `GRAMSHELF_IMPORT_DIR` | `/import` | Optional read-only previous Instaloader archive |
 | `GRAMSHELF_HOST` | `0.0.0.0` | Listening address |
 | `GRAMSHELF_PORT` | `8080` | Listening port inside the container |
 | `GRAMSHELF_ROOT_PATH` | empty | Optional reverse-proxy path prefix, such as `/gramshelf` |
@@ -82,6 +95,9 @@ curl -H "Authorization: Bearer gs_REPLACE_ME" \
 
 curl -X POST -H "Authorization: Bearer gs_REPLACE_ME" \
   http://localhost:8080/api/v1/sync
+
+curl -X POST -H "Authorization: Bearer gs_REPLACE_ME" \
+  http://localhost:8080/api/v1/import/legacy
 ```
 
 `GET /api/v1/health` is intentionally public for container health checks. All other API and media routes require the administrator session or Bearer token. See [docs/API.md](docs/API.md) for the endpoint map.
@@ -105,7 +121,7 @@ ghcr.io/tanzatechxyz/gramshelf:latest
 ghcr.io/tanzatechxyz/gramshelf:main
 ```
 
-A tag such as `v0.3.0` also publishes `0.3.0` and `0.3` image tags.
+A tag such as `v0.4.0` also publishes `0.4.0` and `0.4` image tags.
 
 ## Security and privacy
 

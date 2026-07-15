@@ -168,6 +168,43 @@ class Database:
             ).fetchone()
         return row is not None
 
+    def get_item_by_shortcode(self, shortcode: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM items WHERE shortcode = ?", (shortcode,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_item_metadata(self, shortcode: str, **values: Any) -> bool:
+        allowed = {
+            "instagram_url",
+            "author",
+            "caption",
+            "published_at",
+            "downloaded_at",
+            "media_type",
+            "cover_path",
+        }
+        updates = {key: value for key, value in values.items() if key in allowed}
+        if not updates:
+            return False
+        assignments = ", ".join(f"{key} = ?" for key in updates)
+        with self.connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE items SET {assignments} WHERE shortcode = ?",
+                [*updates.values(), shortcode],
+            )
+        return cursor.rowcount > 0
+
+    def count_unknown_authors(self) -> int:
+        with self.connect() as connection:
+            return int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM items "
+                    "WHERE LOWER(TRIM(author)) IN ('', 'unknown', '@unknown')"
+                ).fetchone()[0]
+            )
+
     def insert_item(self, item: dict[str, Any], media_files: list[dict[str, Any]]) -> int:
         with self.connect() as connection:
             cursor = connection.execute(

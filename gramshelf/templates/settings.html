@@ -47,7 +47,7 @@
       {% if sync_status.running %}
       <form action="{{ url_for('stop_sync_web') }}" method="post">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <button class="button button-danger" type="submit">Stop synchronization</button>
+        <button class="button button-danger" type="submit">Stop current job</button>
       </form>
       {% else %}
       <form action="{{ url_for('test_sync_web') }}" method="post">
@@ -126,6 +126,39 @@
       <button class="button button-primary" type="submit">Save schedule</button>
     </form>
     <p class="next-run">Next run: <strong>{{ settings.next_scheduled_sync | datetime }}</strong></p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2>Archive maintenance</h2><p>Repair existing authors or import a previous Instaloader archive.</p></div>
+    </div>
+    <h3>Unknown authors</h3>
+    <p><strong>{{ settings.unknown_author_count }}</strong> archived item{% if settings.unknown_author_count != 1 %}s{% endif %} currently use <code>@unknown</code>. Repair checks the Saved feed and resolves each owner through Instaloader without downloading the media again.</p>
+    {% if sync_status.running %}
+    <form action="{{ url_for('stop_sync_web') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="button button-danger" type="submit">Stop current job</button>
+    </form>
+    {% else %}
+    <form action="{{ url_for('repair_authors_web') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="button button-secondary" type="submit" {% if not settings.session_configured or not settings.unknown_author_count %}disabled{% endif %}>Repair unknown authors</button>
+    </form>
+    {% endif %}
+    <hr>
+    <h3>Previous Instaloader archive</h3>
+    <p>Mount the old archive read-only at <code>{{ settings.legacy_import_path }}</code>. GramShelf reads Instaloader JSON/JSON.XZ and TXT metadata, copies matching PNG/JPG/video files into <code>/media</code>, and leaves the source unchanged.</p>
+    <p class="field-help">Items are deduplicated by Instagram shortcode. Existing items only receive missing author or caption metadata.</p>
+    {% if settings.legacy_import_available %}
+      {% if not sync_status.running %}
+      <form action="{{ url_for('legacy_import_web') }}" method="post" data-confirm="Import the mounted Instaloader archive? Source files will be left unchanged.">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="button button-primary" type="submit">Import legacy archive</button>
+      </form>
+      {% endif %}
+    {% else %}
+    <div class="flash flash-warning">No import folder is mounted at <code>{{ settings.legacy_import_path }}</code>.</div>
+    {% endif %}
   </section>
 
   <section class="panel">

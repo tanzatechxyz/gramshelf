@@ -37,6 +37,8 @@ def test_setup_login_and_api_auth(client, app) -> None:
     assert "/api/v1/instagram/session/two-factor" in schema.json()["paths"]
     assert "/api/v1/sync/test" in schema.json()["paths"]
     assert "/api/v1/sync/stop" in schema.json()["paths"]
+    assert "/api/v1/import/legacy" in schema.json()["paths"]
+    assert "/api/v1/authors/repair" in schema.json()["paths"]
 
 
 def test_timeline_search_and_item_api(client, app, config) -> None:
@@ -205,7 +207,7 @@ def test_running_sync_can_be_stopped_from_web_and_api(client, app, monkeypatch) 
 
     monkeypatch.setattr(manager, "stop", stop)
     page = client.get("/activity")
-    assert "Stop synchronization" in page.text
+    assert "Stop current job" in page.text
 
     response = client.post(
         "/sync/stop",
@@ -219,6 +221,29 @@ def test_running_sync_can_be_stopped_from_web_and_api(client, app, monkeypatch) 
     assert response.json()["stop_requested"] is True
     assert response.json()["run"]["stopping"] is True
     assert calls == ["stop", "stop"]
+
+
+def test_maintenance_jobs_can_be_started_from_api(client, app, monkeypatch) -> None:
+    complete_setup(client, app)
+    calls = []
+
+    def start_import():
+        calls.append("import")
+        return True, {"id": 70, "status": "queued"}
+
+    def start_repair():
+        calls.append("repair")
+        return True, {"id": 71, "status": "queued"}
+
+    monkeypatch.setattr(app.state.sync_manager, "start_import", start_import)
+    monkeypatch.setattr(app.state.sync_manager, "start_author_repair", start_repair)
+
+    assert client.post("/api/v1/import/legacy").status_code == 202
+    assert client.post("/api/v1/authors/repair").status_code == 202
+    assert calls == ["import", "repair"]
+    page = client.get("/settings")
+    assert "Previous Instaloader archive" in page.text
+    assert "Repair unknown authors" in page.text
 
 
 def test_csrf_rejects_invalid_form(client, app) -> None:

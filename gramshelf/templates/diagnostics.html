@@ -24,6 +24,8 @@
     <div><dt>Instagram session</dt><dd>{% if diagnostics.session.configured %}@{{ diagnostics.session.username }}{% else %}Not configured{% endif %}</dd></div>
     <div><dt>Session validated</dt><dd>{{ diagnostics.session.last_validated_at | datetime }}</dd></div>
     <div><dt>Next scheduled sync</dt><dd>{{ diagnostics.next_scheduled_sync | datetime }}</dd></div>
+    <div><dt>Unknown authors</dt><dd>{{ diagnostics.unknown_author_count }}</dd></div>
+    <div><dt>Legacy import folder</dt><dd>{{ diagnostics.legacy_import_path }} · {% if diagnostics.legacy_import_available %}Available{% else %}Not mounted{% endif %}</dd></div>
   </dl>
 </section>
 

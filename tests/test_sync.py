@@ -23,6 +23,7 @@ class FakeClient:
     posts: list[FakePost] = []
     fail_shortcode: str | None = None
     download_hook = None
+    resolved_authors: dict[str, str] = {}
 
     def __init__(self, username: str, session_path: Path, media_dir: Path):
         self.username = username
@@ -56,12 +57,21 @@ class FakeClient:
             type(self).download_hook()
         return [{"position": 0, "kind": "image", "relative_path": f"{shortcode}/{path.name}"}]
 
+    def resolve_author(self, post):
+        node = getattr(post, "_node", {})
+        owner = node.get("owner", {}) if isinstance(node, dict) else {}
+        owner_id = str(owner.get("id", "")) if isinstance(owner, dict) else ""
+        if owner_id in self.resolved_authors:
+            return self.resolved_authors[owner_id]
+        return post.owner_username
+
     def close(self) -> None:
         pass
 
 
 def configured_manager(tmp_path: Path) -> tuple[Database, SyncManager, AppConfig]:
     FakeClient.download_hook = None
+    FakeClient.resolved_authors = {}
     config = AppConfig(tmp_path / "data", tmp_path / "media")
     config.prepare()
     config.session_path.write_bytes(b"fake session")
@@ -224,3 +234,40 @@ def test_running_sync_can_be_stopped_after_current_item(tmp_path: Path) -> None:
     assert manager.status()["stopping"] is False
     assert manager.stop()[0] is False
     FakeClient.download_hook = None
+
+
+def test_author_repair_updates_existing_unknown_items(tmp_path: Path) -> None:
+    database, manager, _ = configured_manager(tmp_path)
+    post = MetadataFailingPost()
+    FakeClient.posts = [post]
+    FakeClient.resolved_authors = {"42": "actual_owner"}
+    database.insert_item(
+        {
+            "shortcode": post.shortcode,
+            "instagram_url": f"https://www.instagram.com/p/{post.shortcode}/",
+            "author": "unknown",
+            "caption": "existing",
+            "published_at": "2025-03-04T00:00:00+00:00",
+            "downloaded_at": "2025-03-05T00:00:00+00:00",
+            "media_type": "image",
+            "cover_path": f"{post.shortcode}/{post.shortcode}.jpg",
+        },
+        [
+            {
+                "position": 0,
+                "kind": "image",
+                "relative_path": f"{post.shortcode}/{post.shortcode}.jpg",
+            }
+        ],
+    )
+
+    started, run = manager.start_author_repair()
+    assert started
+    manager.wait(3)
+
+    result = database.get_sync_run(run["id"])
+    assert result is not None
+    assert result["status"] == "success"
+    assert result["downloaded_count"] == 1
+    assert database.get_item_by_shortcode(post.shortcode)["author"] == "actual_owner"
+    assert database.count_unknown_authors() == 0

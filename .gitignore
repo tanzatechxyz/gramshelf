@@ -12,5 +12,6 @@ pip-build-env-*/
 .env
 data/
 media/
+import/
 dev-data/
 dev-media/

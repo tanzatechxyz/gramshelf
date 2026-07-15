@@ -229,9 +229,12 @@ class SyncManager:
             f"Downloaded {counts['downloaded_count']}, skipped {counts['skipped_count']}, "
             f"errors {counts['error_count']}{repair_message}{limit_message}{cancel_message}"
         )
-        archive_scan_complete = not bool(counts["error_count"])
+        # Per-item failures do not make the Saved-feed traversal incomplete.
+        # Once a traversal reaches its boundary, later runs may safely stop at
+        # the configured streak of already-known items.
+        archive_scan_complete = True
         if stopped_at_download_limit or cancelled:
-            archive_scan_complete = can_stop_at_known and archive_scan_complete
+            archive_scan_complete = can_stop_at_known
         completed_at = utc_now()
         self.database.update_sync_run(
             run_id,

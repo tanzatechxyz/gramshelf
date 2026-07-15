@@ -111,6 +111,30 @@ class Database:
                     "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)",
                     (key, json.dumps(value)),
                 )
+            # Versions through 0.4.0 incorrectly cleared this flag whenever a
+            # full Saved-feed traversal had individual item errors. Promote
+            # those completed syncs so the known-item cutoff works immediately
+            # after upgrading instead of requiring one more full traversal.
+            previous_sync = connection.execute(
+                """
+                SELECT status FROM sync_runs
+                WHERE trigger IN ('web', 'api', 'schedule', 'manual')
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
+            archive_state = connection.execute(
+                "SELECT value FROM settings WHERE key = 'archive_scan_complete'"
+            ).fetchone()
+            if (
+                previous_sync is not None
+                and previous_sync["status"] == "completed_with_errors"
+                and archive_state is not None
+                and archive_state["value"] == "false"
+            ):
+                connection.execute(
+                    "UPDATE settings SET value = 'true' "
+                    "WHERE key = 'archive_scan_complete'"
+                )
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         with self.connect() as connection:

@@ -67,3 +67,22 @@ def test_item_metadata_can_be_repaired_by_shortcode(tmp_path: Path) -> None:
     assert database.get_item(item_id)["author"] == "alice"
     assert database.get_item_by_shortcode("UNKNOWN1")["id"] == item_id
     assert database.count_unknown_authors() == 0
+
+
+def test_upgrade_restores_cutoff_after_completed_sync_with_item_errors(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "db.sqlite3")
+    database.initialize()
+    run_id = database.create_sync_run("web")
+    database.update_sync_run(
+        run_id,
+        status="completed_with_errors",
+        completed_at="2026-07-16T00:00:00+00:00",
+        error_count=2,
+    )
+    database.set_settings({"archive_scan_complete": False})
+
+    database.initialize()
+
+    assert database.get_setting("archive_scan_complete") is True

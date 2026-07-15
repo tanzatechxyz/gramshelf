@@ -131,7 +131,46 @@ def test_sync_keeps_running_after_item_error(tmp_path: Path) -> None:
     assert result["downloaded_count"] == 1
     assert result["error_count"] == 1
     assert result["errors"][0]["shortcode"] == "BROKEN1"
-    assert database.get_setting("archive_scan_complete") is False
+    assert database.get_setting("archive_scan_complete") is True
+    FakeClient.fail_shortcode = None
+
+
+def test_completed_scan_with_item_errors_still_enables_known_item_cutoff(
+    tmp_path: Path,
+) -> None:
+    database, manager, _ = configured_manager(tmp_path)
+    database.set_settings({"stop_after_known": 3})
+    FakeClient.fail_shortcode = "BROKEN4"
+    FakeClient.posts = [
+        FakePost(
+            f"KNOWN{index}",
+            "alice",
+            f"known {index}",
+            datetime(2025, 2, index, tzinfo=UTC),
+        )
+        for index in range(1, 4)
+    ] + [
+        FakePost("BROKEN4", "bob", "bad", datetime(2025, 1, 1, tzinfo=UTC))
+    ]
+
+    started, first = manager.start("manual")
+    assert started
+    manager.wait(3)
+    first_run = database.get_sync_run(first["id"])
+    assert first_run is not None
+    assert first_run["status"] == "completed_with_errors"
+    assert first_run["discovered_count"] == 4
+    assert database.get_setting("archive_scan_complete") is True
+
+    started, second = manager.start("schedule")
+    assert started
+    manager.wait(3)
+    second_run = database.get_sync_run(second["id"])
+    assert second_run is not None
+    assert second_run["status"] == "success"
+    assert second_run["discovered_count"] == 3
+    assert second_run["skipped_count"] == 3
+    assert second_run["error_count"] == 0
     FakeClient.fail_shortcode = None
 
 

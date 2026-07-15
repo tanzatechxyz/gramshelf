@@ -121,7 +121,7 @@
       <label>
         Stop after consecutive known items
         <input type="number" name="stop_after_known" value="{{ settings.stop_after_known }}" min="1" max="50" required>
-        <span class="field-help">After the first full import, stop scanning once this many already-archived items appear in a row.</span>
+        <span class="field-help">After the first complete Saved-feed scan, stop once this many already-archived items appear in a row. Individual item errors do not disable this cutoff.</span>
       </label>
       <button class="button button-primary" type="submit">Save schedule</button>
     </form>

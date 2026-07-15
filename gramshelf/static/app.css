@@ -200,7 +200,7 @@ p { margin-top: 0; }
 .status-success, .status-running { background: var(--success-soft); color: var(--success); }
 .status-running::before { width: 6px; height: 6px; margin-right: 0.4rem; border-radius: 50%; background: currentColor; content: ""; animation: blink 1.5s infinite; }
 .status-error { background: var(--danger-soft); color: var(--danger); }
-.status-completed_with_errors { background: var(--warning-soft); color: var(--warning); }
+.status-completed_with_errors, .status-cancelled { background: var(--warning-soft); color: var(--warning); }
 @keyframes blink { 50% { opacity: 0.25; } }
 
 .flash-stack { display: grid; gap: 0.5rem; margin-bottom: 1.5rem; }
@@ -356,6 +356,7 @@ code { padding: 0.08rem 0.3rem; border-radius: 0.3rem; background: var(--surface
 .status-dot.status-success { background: var(--success); }
 .status-dot.status-error { background: var(--danger); }
 .status-dot.status-completed_with_errors { background: var(--warning); }
+.status-dot.status-cancelled { background: var(--warning); }
 .status-dot.status-running, .status-dot.status-queued { background: var(--success); animation: blink 1.5s infinite; }
 .run-title { font-weight: 700; }
 .run-status { color: var(--text-muted); font-size: 0.82rem; }

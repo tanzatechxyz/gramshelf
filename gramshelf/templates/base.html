@@ -25,7 +25,7 @@
       </nav>
       <div class="header-actions">
         <span class="status-pill status-{{ sync_status.status }}" data-sync-status data-status-url="{{ url_for('api_sync_status') }}">
-          {% if sync_status.running %}Syncing{% elif sync_status.status == 'never_run' %}Not synced{% else %}{{ sync_status.status | replace('_', ' ') | title }}{% endif %}
+          {% if sync_status.stopping %}Stopping{% elif sync_status.running %}Syncing{% elif sync_status.status == 'never_run' %}Not synced{% else %}{{ sync_status.status | replace('_', ' ') | title }}{% endif %}
         </span>
         <form action="{{ url_for('logout') }}" method="post">
           <input type="hidden" name="csrf" value="{{ csrf_token }}">

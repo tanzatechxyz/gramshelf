@@ -12,6 +12,7 @@ It is designed for a single Docker container on a home server such as TrueNAS SC
 - Shows a responsive publication-date timeline with search, author/type/date filters, and item details.
 - Runs on a configurable interval or on demand from the UI and API.
 - Provides a three-item test synchronization before running a full import.
+- Lets the administrator stop a running synchronization after its current item finishes.
 - Records synchronization progress, history, and per-item errors.
 - Provides an administrator login, setup flow, session management, diagnostics, and an OpenAPI-documented HTTP API.
 
@@ -52,6 +53,8 @@ instaloader --login YOUR_USERNAME
 Complete any Instagram prompt, then upload Instaloader's generated `session-YOUR_USERNAME` file on GramShelf's Settings page. GramShelf validates the uploaded session before replacing the currently stored session.
 
 Session files contain authentication cookies. Treat them as secrets and only upload a file you generated yourself. Instagram is an unofficial and changeable integration: sessions can expire, Saved-feed access can break when Instagram changes its private interfaces, and aggressive schedules can cause rate limits. The default 12-hour interval is deliberately conservative.
+
+If Instagram refuses an optional full-metadata lookup after media has downloaded, GramShelf now archives the item from the metadata already present in the Saved-feed response. Missing fields use safe fallbacks instead of leaving downloaded media invisible.
 
 ## Container configuration
 
@@ -102,7 +105,7 @@ ghcr.io/tanzatechxyz/gramshelf:latest
 ghcr.io/tanzatechxyz/gramshelf:main
 ```
 
-A tag such as `v0.2.0` also publishes `0.2.0` and `0.2` image tags.
+A tag such as `v0.3.0` also publishes `0.3.0` and `0.3` image tags.
 
 ## Security and privacy
 

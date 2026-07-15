@@ -52,6 +52,7 @@ from .schemas import (
     SettingsUpdate,
     SyncRunOut,
     SyncStartOut,
+    SyncStopOut,
     SyncStatusOut,
 )
 from .security import hash_password, new_api_token, new_csrf_token, verify_password
@@ -507,6 +508,24 @@ def create_app(
             flash(request, "A synchronization is already running.", "warning")
         return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
 
+    @app.post("/sync/stop", include_in_schema=False, name="stop_sync_web")
+    def stop_sync_web(
+        request: Request,
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        stop_requested, _run = sync_manager.stop()
+        if stop_requested:
+            flash(
+                request,
+                "Stop requested. The current item will finish before synchronization stops.",
+                "warning",
+            )
+        else:
+            flash(request, "No synchronization is currently running.", "warning")
+        return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
+
     @app.get("/settings", response_class=HTMLResponse, include_in_schema=False, name="settings_page")
     def settings_page(request: Request, _: bool = Depends(require_web_admin)) -> HTMLResponse:
         return render(request, "settings.html", settings=settings_payload(request))
@@ -860,6 +879,16 @@ def create_app(
         started, run = sync_manager.start("test", max_downloads=3)
         return {"started": started, "run": run}
 
+    @app.post(
+        "/api/v1/sync/stop",
+        response_model=SyncStopOut,
+        tags=["Synchronization"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    def api_sync_stop() -> dict[str, Any]:
+        stop_requested, run = sync_manager.stop()
+        return {"stop_requested": stop_requested, "run": run}
+
     @app.get(
         "/api/v1/sync/status",
         response_model=SyncStatusOut,
@@ -870,6 +899,7 @@ def create_app(
         current = sync_manager.status()
         return {
             "running": bool(current.get("running")),
+            "stopping": bool(current.get("stopping")),
             "status": str(current.get("status", "unknown")),
             "run": current if current.get("id") else None,
         }

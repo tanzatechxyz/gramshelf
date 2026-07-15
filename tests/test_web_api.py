@@ -36,6 +36,7 @@ def test_setup_login_and_api_auth(client, app) -> None:
     assert "/api/v1/instagram/session/login" in schema.json()["paths"]
     assert "/api/v1/instagram/session/two-factor" in schema.json()["paths"]
     assert "/api/v1/sync/test" in schema.json()["paths"]
+    assert "/api/v1/sync/stop" in schema.json()["paths"]
 
 
 def test_timeline_search_and_item_api(client, app, config) -> None:
@@ -180,6 +181,44 @@ def test_test_sync_endpoint_uses_three_item_limit(client, app, monkeypatch) -> N
     assert response.status_code == 202
     assert response.json()["started"] is True
     assert calls == [("test", 3)]
+
+
+def test_running_sync_can_be_stopped_from_web_and_api(client, app, monkeypatch) -> None:
+    complete_setup(client, app)
+    manager = app.state.sync_manager
+    running = {
+        "id": 42,
+        "status": "running",
+        "running": True,
+        "stopping": False,
+        "discovered_count": 2,
+        "downloaded_count": 1,
+        "skipped_count": 0,
+    }
+    calls = []
+
+    monkeypatch.setattr(manager, "status", lambda: running)
+
+    def stop():
+        calls.append("stop")
+        return True, {**running, "stopping": True}
+
+    monkeypatch.setattr(manager, "stop", stop)
+    page = client.get("/activity")
+    assert "Stop synchronization" in page.text
+
+    response = client.post(
+        "/sync/stop",
+        data={"csrf": csrf_from(page.text)},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    response = client.post("/api/v1/sync/stop")
+    assert response.status_code == 200
+    assert response.json()["stop_requested"] is True
+    assert response.json()["run"]["stopping"] is True
+    assert calls == ["stop", "stop"]
 
 
 def test_csrf_rejects_invalid_form(client, app) -> None:

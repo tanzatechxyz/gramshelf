@@ -218,7 +218,13 @@ class InstaloaderClient:
             raise RuntimeError("Instagram client is not connected")
         target_dir = self.media_dir / shortcode
         target_dir.mkdir(parents=True, exist_ok=True)
-        self.loader.download_post(post, target=shortcode)
+        metadata_error: Exception | None = None
+        try:
+            self.loader.download_post(post, target=shortcode)
+        except Exception as exc:
+            if "Fetching Post metadata failed" not in str(exc):
+                raise
+            metadata_error = exc
 
         allowed_images = {".jpg", ".jpeg", ".png", ".webp"}
         allowed_videos = {".mp4", ".mov", ".m4v"}
@@ -238,6 +244,8 @@ class InstaloaderClient:
                 }
             )
         if not media:
+            if metadata_error is not None:
+                raise metadata_error
             raise RuntimeError("Instaloader completed without producing an image or video")
         return media
 

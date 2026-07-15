@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import threading
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,8 +16,35 @@ ClientFactory = Callable[[str, Path, Path], Any]
 SHORTCODE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def _published_at(post: Any) -> str:
-    value = post.date_utc
+def _post_node(post: Any) -> dict[str, Any]:
+    try:
+        node = getattr(post, "_node", {})
+    except Exception:
+        return {}
+    return node if isinstance(node, dict) else {}
+
+
+def _shortcode(post: Any) -> str:
+    node = _post_node(post)
+    value = node.get("shortcode") or node.get("code")
+    if value:
+        return str(value)
+    try:
+        return str(post.shortcode)
+    except Exception:
+        return ""
+
+
+def _published_at(post: Any, fallback: str) -> str:
+    try:
+        value = post.date_utc
+    except Exception:
+        node = _post_node(post)
+        timestamp = node.get("date", node.get("taken_at_timestamp"))
+        try:
+            value = datetime.fromtimestamp(float(timestamp), tz=UTC)
+        except (TypeError, ValueError, OSError):
+            return fallback
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     else:
@@ -26,12 +53,55 @@ def _published_at(post: Any) -> str:
 
 
 def _media_type(post: Any) -> str:
-    typename = str(getattr(post, "typename", ""))
-    if typename == "GraphSidecar":
+    node = _post_node(post)
+    typename = str(node.get("__typename", ""))
+    if not typename:
+        try:
+            typename = str(post.typename)
+        except Exception:
+            typename = ""
+    if typename in {"GraphSidecar", "XDTGraphSidecar"}:
         return "carousel"
-    if typename == "GraphVideo" or bool(getattr(post, "is_video", False)):
+    if "is_video" in node:
+        is_video = bool(node["is_video"])
+    else:
+        try:
+            is_video = bool(post.is_video)
+        except Exception:
+            is_video = False
+    if typename in {"GraphVideo", "XDTGraphVideo"} or is_video:
         return "video"
     return "image"
+
+
+def _author(post: Any) -> str:
+    node = _post_node(post)
+    for candidate in (node.get("owner"), node.get("user")):
+        if isinstance(candidate, dict) and candidate.get("username"):
+            return str(candidate["username"])
+    if node.get("owner_username"):
+        return str(node["owner_username"])
+    try:
+        value = post.owner_username
+        return str(value) if value else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _caption(post: Any) -> str:
+    node = _post_node(post)
+    caption_node = node.get("edge_media_to_caption")
+    edges = caption_node.get("edges", []) if isinstance(caption_node, dict) else []
+    if edges and isinstance(edges[0], dict):
+        edge_node = edges[0].get("node")
+        if isinstance(edge_node, dict):
+            return str(edge_node.get("text") or "")
+    if "caption" in node:
+        return str(node.get("caption") or "")
+    try:
+        return str(post.caption or "")
+    except Exception:
+        return ""
 
 
 class SyncManager:
@@ -46,6 +116,7 @@ class SyncManager:
         self.client_factory = client_factory
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._cancel_event = threading.Event()
 
     def start(
         self, trigger: str, max_downloads: int | None = None
@@ -59,6 +130,7 @@ class SyncManager:
             current = self.database.current_sync_run()
             if current is not None:
                 return False, current
+            self._cancel_event.clear()
             run_id = self.database.create_sync_run(trigger)
             self._thread = threading.Thread(
                 target=self._execute,
@@ -74,17 +146,38 @@ class SyncManager:
         if thread is not None:
             thread.join(timeout)
 
+    def stop(self) -> tuple[bool, dict[str, Any] | None]:
+        with self._lock:
+            current = self.database.current_sync_run()
+            if (
+                current is None
+                or self._thread is None
+                or not self._thread.is_alive()
+            ):
+                return False, current
+            self._cancel_event.set()
+            self.database.update_sync_run(
+                current["id"], message="Stop requested; finishing the current item"
+            )
+            updated = self.database.get_sync_run(current["id"])
+            if updated is not None:
+                updated["running"] = True
+                updated["stopping"] = True
+            return True, updated
+
     def status(self) -> dict[str, Any]:
         current = self.database.current_sync_run()
         if current is not None:
             current["running"] = True
+            current["stopping"] = self._cancel_event.is_set()
             return current
         latest = self.database.list_sync_runs(limit=1)
         if latest:
             result = latest[0]
             result["running"] = False
+            result["stopping"] = False
             return result
-        return {"running": False, "status": "never_run"}
+        return {"running": False, "stopping": False, "status": "never_run"}
 
     def _execute(self, run_id: int, max_downloads: int | None = None) -> None:
         started_at = utc_now()
@@ -99,13 +192,21 @@ class SyncManager:
         can_stop_at_known = bool(self.database.get_setting("archive_scan_complete", False))
         known_streak = 0
         stopped_at_download_limit = False
+        cancelled = False
         client = self.client_factory(username, self.config.session_path, self.config.media_dir)
         try:
             client.connect()
-            posts = client.iter_saved_posts()
-            for post in posts:
+            posts = iter(client.iter_saved_posts())
+            while True:
+                if self._cancel_event.is_set():
+                    cancelled = True
+                    break
+                try:
+                    post = next(posts)
+                except StopIteration:
+                    break
                 counts["discovered_count"] += 1
-                shortcode = str(getattr(post, "shortcode", ""))
+                shortcode = _shortcode(post)
                 if not SHORTCODE_RE.fullmatch(shortcode):
                     counts["error_count"] += 1
                     self.database.add_sync_error(run_id, "Saved item had an invalid shortcode")
@@ -130,9 +231,9 @@ class SyncManager:
                     item = {
                         "shortcode": shortcode,
                         "instagram_url": f"https://www.instagram.com/p/{shortcode}/",
-                        "author": str(getattr(post, "owner_username", "unknown")),
-                        "caption": str(getattr(post, "caption", "") or ""),
-                        "published_at": _published_at(post),
+                        "author": _author(post),
+                        "caption": _caption(post),
+                        "published_at": _published_at(post, downloaded_at),
                         "downloaded_at": downloaded_at,
                         "media_type": _media_type(post),
                         "cover_path": cover,
@@ -145,6 +246,9 @@ class SyncManager:
                     counts["error_count"] += 1
                     self.database.add_sync_error(run_id, str(exc), shortcode)
                 self._update_progress(run_id, counts)
+                if self._cancel_event.is_set():
+                    cancelled = True
+                    break
                 if max_downloads is not None and counts["downloaded_count"] >= max_downloads:
                     stopped_at_download_limit = True
                     break
@@ -159,14 +263,20 @@ class SyncManager:
             except Exception:
                 pass
 
-        status = "completed_with_errors" if counts["error_count"] else "success"
+        if cancelled:
+            status = "cancelled"
+        elif counts["error_count"]:
+            status = "completed_with_errors"
+        else:
+            status = "success"
         limit_message = " (test limit reached)" if stopped_at_download_limit else ""
+        cancel_message = " (stopped by administrator)" if cancelled else ""
         message = (
             f"Downloaded {counts['downloaded_count']}, skipped {counts['skipped_count']}, "
-            f"errors {counts['error_count']}{limit_message}"
+            f"errors {counts['error_count']}{limit_message}{cancel_message}"
         )
         archive_scan_complete = not bool(counts["error_count"])
-        if stopped_at_download_limit:
+        if stopped_at_download_limit or cancelled:
             archive_scan_complete = can_stop_at_known and archive_scan_complete
         completed_at = utc_now()
         self.database.update_sync_run(

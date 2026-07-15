@@ -22,6 +22,7 @@ class FakePost:
 class FakeClient:
     posts: list[FakePost] = []
     fail_shortcode: str | None = None
+    download_hook = None
 
     def __init__(self, username: str, session_path: Path, media_dir: Path):
         self.username = username
@@ -43,12 +44,16 @@ class FakeClient:
             second = target / f"{shortcode}_2.mp4"
             first.write_bytes(b"image")
             second.write_bytes(b"video")
+            if type(self).download_hook:
+                type(self).download_hook()
             return [
                 {"position": 0, "kind": "image", "relative_path": f"{shortcode}/{first.name}"},
                 {"position": 1, "kind": "video", "relative_path": f"{shortcode}/{second.name}"},
             ]
         path = target / f"{shortcode}.jpg"
         path.write_bytes(b"image")
+        if type(self).download_hook:
+            type(self).download_hook()
         return [{"position": 0, "kind": "image", "relative_path": f"{shortcode}/{path.name}"}]
 
     def close(self) -> None:
@@ -56,6 +61,7 @@ class FakeClient:
 
 
 def configured_manager(tmp_path: Path) -> tuple[Database, SyncManager, AppConfig]:
+    FakeClient.download_hook = None
     config = AppConfig(tmp_path / "data", tmp_path / "media")
     config.prepare()
     config.session_path.write_bytes(b"fake session")
@@ -144,3 +150,77 @@ def test_test_sync_downloads_at_most_three_items(tmp_path: Path) -> None:
     assert "test limit reached" in result["message"]
     assert database.count_items() == 3
     assert database.get_setting("archive_scan_complete") is False
+
+
+class MetadataFailingPost:
+    shortcode = "FALLBACK1"
+    typename = "GraphImage"
+    is_video = False
+    date_utc = datetime(2025, 3, 4, tzinfo=UTC)
+
+    def __init__(self):
+        self._node = {
+            "shortcode": self.shortcode,
+            "__typename": self.typename,
+            "is_video": False,
+            "taken_at_timestamp": int(self.date_utc.timestamp()),
+            "owner": {"id": "42"},
+            "edge_media_to_caption": {
+                "edges": [{"node": {"text": "Caption from cached Saved metadata"}}]
+            },
+        }
+
+    @property
+    def owner_username(self):
+        raise RuntimeError("Fetching Post metadata failed.")
+
+
+def test_sync_archives_item_when_optional_author_metadata_fails(tmp_path: Path) -> None:
+    database, manager, _ = configured_manager(tmp_path)
+    FakeClient.fail_shortcode = None
+    FakeClient.posts = [MetadataFailingPost()]
+
+    started, run = manager.start("test")
+    assert started
+    manager.wait(3)
+
+    result = database.get_sync_run(run["id"])
+    assert result is not None
+    assert result["status"] == "success"
+    assert result["downloaded_count"] == 1
+    item = database.list_items()[0][0]
+    assert item["author"] == "unknown"
+    assert item["caption"] == "Caption from cached Saved metadata"
+    assert item["published_at"].startswith("2025-03-04")
+
+
+def test_running_sync_can_be_stopped_after_current_item(tmp_path: Path) -> None:
+    database, manager, _ = configured_manager(tmp_path)
+    FakeClient.fail_shortcode = None
+    FakeClient.posts = [
+        FakePost(
+            f"STOP{index}",
+            "alice",
+            f"item {index}",
+            datetime(2025, 2, index, tzinfo=UTC),
+        )
+        for index in range(1, 5)
+    ]
+    stop_results = []
+    FakeClient.download_hook = lambda: stop_results.append(manager.stop())
+
+    started, run = manager.start("web")
+    assert started
+    manager.wait(3)
+
+    result = database.get_sync_run(run["id"])
+    assert result is not None
+    assert stop_results[0][0] is True
+    assert stop_results[0][1]["stopping"] is True
+    assert result["status"] == "cancelled"
+    assert result["downloaded_count"] == 1
+    assert "stopped by administrator" in result["message"]
+    assert database.count_items() == 1
+    assert manager.status()["stopping"] is False
+    assert manager.stop()[0] is False
+    FakeClient.download_hook = None

@@ -26,6 +26,7 @@ The administrator browser session is also accepted. JSON errors use FastAPI's st
 | `DELETE` | `/api/v1/instagram/session` | Remove the stored session without deleting the archive |
 | `POST` | `/api/v1/sync` | Queue an on-demand synchronization; returns HTTP 202 |
 | `POST` | `/api/v1/sync/test` | Queue a test synchronization that downloads at most three new items |
+| `POST` | `/api/v1/sync/stop` | Request that the active synchronization stop after its current item |
 | `GET` | `/api/v1/sync/status` | Current or most recent synchronization state |
 | `GET` | `/api/v1/sync/history` | Paginated synchronization history |
 | `GET` | `/api/v1/sync/history/{id}` | One run with its errors |
@@ -78,3 +79,12 @@ curl -X POST http://localhost:8080/api/v1/instagram/session/two-factor \
 ```
 
 The pending two-factor login is intentionally lost when the container restarts. Existing session-file upload remains available when Instagram rejects a direct login.
+
+## Stop a synchronization
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sync/stop \
+  -H "Authorization: Bearer gs_REPLACE_ME"
+```
+
+Stopping is cooperative: an in-progress Instaloader media request is allowed to finish so files are not deliberately interrupted mid-write. The response field `stop_requested` indicates whether a running synchronization accepted the request. Status reports `stopping: true` until the run finishes with status `cancelled`.

@@ -84,7 +84,13 @@ class SyncStartOut(BaseModel):
 
 class SyncStatusOut(BaseModel):
     running: bool
+    stopping: bool = False
     status: str
+    run: dict[str, Any] | None = None
+
+
+class SyncStopOut(BaseModel):
+    stop_requested: bool
     run: dict[str, Any] | None = None
 
 

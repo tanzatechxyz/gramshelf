@@ -28,6 +28,7 @@ class FakeLoader:
     options = {}
     require_two_factor = False
     password_seen: str | None = None
+    fail_metadata_after_download = False
 
     def __init__(self, **options):
         type(self).options = options
@@ -59,6 +60,8 @@ class FakeLoader:
         (directory / f"{post.shortcode}_1.jpg").write_bytes(b"image")
         (directory / f"{post.shortcode}_2.mp4").write_bytes(b"video")
         (directory / "ignored.txt").write_text("ignored")
+        if self.fail_metadata_after_download:
+            raise RuntimeError("Fetching Post metadata failed.")
         return True
 
     def close(self) -> None:
@@ -86,6 +89,7 @@ def fake_instaloader(monkeypatch):
     FakeLoader.logged_in = "archive_user"
     FakeLoader.require_two_factor = False
     FakeLoader.password_seen = None
+    FakeLoader.fail_metadata_after_download = False
     return module
 
 
@@ -154,3 +158,21 @@ def test_session_creation_supports_two_factor(tmp_path: Path, fake_instaloader) 
     assert manager.complete_two_factor("123456") == "archive_user"
     assert manager.pending_username() is None
     assert session.read_bytes() == b"saved-instaloader-session"
+
+
+def test_download_recovers_media_written_before_metadata_failure(
+    tmp_path: Path, fake_instaloader
+) -> None:
+    session = tmp_path / "session"
+    session.write_bytes(b"session")
+    media = tmp_path / "media"
+    media.mkdir()
+    client = InstaloaderClient("archive_user", session, media)
+    client.connect()
+    FakeLoader.fail_metadata_after_download = True
+
+    files = client.download_post(SimpleNamespace(shortcode="RECOVER1"), "RECOVER1")
+
+    assert [entry["kind"] for entry in files] == ["image", "video"]
+    assert all((media / entry["relative_path"]).is_file() for entry in files)
+    client.close()

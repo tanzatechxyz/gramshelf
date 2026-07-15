@@ -24,7 +24,9 @@
 
   const statusNode = document.querySelector("[data-sync-status]");
   if (!statusNode) return;
-  let wasRunning = statusNode.textContent.trim().toLowerCase() === "syncing";
+  let wasRunning = ["syncing", "stopping"].includes(
+    statusNode.textContent.trim().toLowerCase(),
+  );
 
   const updateStatus = async () => {
     try {
@@ -36,7 +38,7 @@
       const payload = await response.json();
       const running = Boolean(payload.running);
       const label = running
-        ? "Syncing"
+        ? (payload.stopping ? "Stopping" : "Syncing")
         : payload.status === "never_run"
           ? "Not synced"
           : String(payload.status || "Unknown").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());

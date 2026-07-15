@@ -263,6 +263,7 @@ def create_app(
             "legacy_import_path": str(config.import_dir),
             "legacy_import_available": config.import_dir.is_dir(),
             "unknown_author_count": database.count_unknown_authors(),
+            "archive_scan_complete": bool(values.get("archive_scan_complete", False)),
         }
 
     def session_payload(request: Request) -> dict[str, Any]:
@@ -472,7 +473,14 @@ def create_app(
         item = database.get_item(item_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Archived item not found")
-        return render(request, "item.html", item=item)
+        neighbors = database.get_item_neighbors(item_id)
+        return render(
+            request,
+            "item.html",
+            item=item,
+            previous_item_id=neighbors["previous_id"],
+            next_item_id=neighbors["next_id"],
+        )
 
     @app.get("/activity", response_class=HTMLResponse, include_in_schema=False, name="activity_page")
     def activity_page(request: Request, _: bool = Depends(require_web_admin)) -> HTMLResponse:
@@ -563,6 +571,28 @@ def create_app(
         else:
             flash(request, "Another synchronization or import is already running.", "warning")
         return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
+
+    @app.post(
+        "/settings/archive-scan",
+        include_in_schema=False,
+        name="archive_scan_state_web",
+    )
+    def archive_scan_state_web(
+        request: Request,
+        complete: bool = Form(...),
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        if sync_manager.status().get("running"):
+            flash(request, "Stop the current job before changing the scan state.", "warning")
+        else:
+            database.set_settings({"archive_scan_complete": complete})
+            if complete:
+                flash(request, "Archive scan marked complete; the known-item cutoff is active.", "success")
+            else:
+                flash(request, "Archive scan reset; the next synchronization will scan the full Saved feed.", "warning")
+        return RedirectResponse(str(request.url_for("settings_page")), status_code=303)
 
     @app.get("/settings", response_class=HTMLResponse, include_in_schema=False, name="settings_page")
     def settings_page(request: Request, _: bool = Depends(require_web_admin)) -> HTMLResponse:
@@ -705,6 +735,9 @@ def create_app(
             "free_space": disk.free,
             "item_count": database.count_items(),
             "unknown_author_count": database.count_unknown_authors(),
+            "archive_scan_complete": bool(
+                database.get_setting("archive_scan_complete", False)
+            ),
             "legacy_import_path": str(config.import_dir),
             "legacy_import_available": config.import_dir.is_dir(),
             "session": session_payload(request),
@@ -1030,6 +1063,9 @@ def create_app(
             "free_bytes": disk.free,
             "item_count": database.count_items(),
             "unknown_author_count": database.count_unknown_authors(),
+            "archive_scan_complete": bool(
+                database.get_setting("archive_scan_complete", False)
+            ),
             "legacy_import_path": str(config.import_dir),
             "legacy_import_available": config.import_dir.is_dir(),
             "session": session_payload(request),

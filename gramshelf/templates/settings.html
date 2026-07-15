@@ -126,6 +126,25 @@
       <button class="button button-primary" type="submit">Save schedule</button>
     </form>
     <p class="next-run">Next run: <strong>{{ settings.next_scheduled_sync | datetime }}</strong></p>
+    <hr>
+    <div class="panel-heading">
+      <div>
+        <h3>Known-item cutoff state</h3>
+        <p>Controls whether synchronization may stop after the configured run of archived items.</p>
+      </div>
+      <span class="status-pill {% if settings.archive_scan_complete %}status-success{% else %}status-completed_with_errors{% endif %}">{% if settings.archive_scan_complete %}Ready{% else %}Full scan needed{% endif %}</span>
+    </div>
+    <form action="{{ url_for('archive_scan_state_web') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="complete" value="{% if settings.archive_scan_complete %}false{% else %}true{% endif %}">
+      {% if settings.archive_scan_complete %}
+      <button class="button button-secondary" type="submit" {% if sync_status.running %}disabled{% endif %}>Force next full scan</button>
+      <p class="field-help">Resets <code>archive_scan_complete</code>. The next completed synchronization marks it ready again.</p>
+      {% else %}
+      <button class="button button-primary" type="submit" {% if sync_status.running %}disabled{% endif %}>Mark scan complete</button>
+      <p class="field-help">Activates the consecutive-known-item cutoff without waiting for a full traversal.</p>
+      {% endif %}
+    </form>
   </section>
 
   <section class="panel">

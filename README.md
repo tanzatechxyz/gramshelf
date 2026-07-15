@@ -9,9 +9,10 @@ It is designed for a single Docker container on a home server such as TrueNAS SC
 - Downloads available images, videos, and carousel media from your Saved feed.
 - Deduplicates posts by Instagram shortcode.
 - Stores the author, caption, original URL, publication time, download time, and media type.
-- Shows a responsive publication-date timeline with search, author/type/date filters, and item details.
+- Shows a responsive publication-date timeline with search, author/type/date filters, item details, and Previous/Next navigation.
 - Runs on a configurable interval or on demand from the UI and API.
 - After one complete Saved-feed traversal, stops later runs at the configured consecutive-known-item cutoff even if individual older items had errors.
+- Shows the cutoff state in Settings and lets the administrator mark it complete or force the next full scan.
 - Provides a three-item test synchronization before running a full import.
 - Lets the administrator stop a running synchronization after its current item finishes.
 - Resolves post-owner usernames from Instaloader's cached owner ID and can repair older `@unknown` items.
@@ -122,7 +123,7 @@ ghcr.io/tanzatechxyz/gramshelf:latest
 ghcr.io/tanzatechxyz/gramshelf:main
 ```
 
-A tag such as `v0.4.1` also publishes `0.4.1` and `0.4` image tags.
+A tag such as `v0.5.0` also publishes `0.5.0` and `0.5` image tags.
 
 ## Security and privacy
 

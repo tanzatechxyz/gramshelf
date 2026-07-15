@@ -24,11 +24,17 @@ def test_setup_login_and_api_auth(client, app) -> None:
     settings = client.patch(
         "/api/v1/settings",
         headers={"Authorization": f"Bearer {token}"},
-        json={"sync_enabled": False, "sync_interval_minutes": 60, "stop_after_known": 5},
+        json={
+            "sync_enabled": False,
+            "sync_interval_minutes": 60,
+            "stop_after_known": 5,
+            "archive_scan_complete": True,
+        },
     )
     assert settings.status_code == 200
     assert settings.json()["sync_enabled"] is False
     assert settings.json()["sync_interval_minutes"] == 60
+    assert settings.json()["archive_scan_complete"] is True
 
     schema = client.get("/api/openapi.json", headers={"Authorization": f"Bearer {token}"})
     assert schema.status_code == 200
@@ -73,6 +79,61 @@ def test_timeline_search_and_item_api(client, app, config) -> None:
     assert client.get(f"/items/{item_id}").status_code == 200
     assert client.get("/activity").status_code == 200
     assert client.get("/diagnostics").status_code == 200
+
+
+def test_item_page_navigates_in_timeline_order(client, app) -> None:
+    complete_setup(client, app)
+
+    def insert(shortcode: str, published_at: str) -> int:
+        relative_path = f"{shortcode}/{shortcode}.jpg"
+        return app.state.database.insert_item(
+            {
+                "shortcode": shortcode,
+                "instagram_url": f"https://www.instagram.com/p/{shortcode}/",
+                "author": "alice",
+                "caption": shortcode,
+                "published_at": published_at,
+                "downloaded_at": "2026-07-15T12:00:00+00:00",
+                "media_type": "image",
+                "cover_path": relative_path,
+            },
+            [{"position": 0, "kind": "image", "relative_path": relative_path}],
+        )
+
+    older_id = insert("OLDER", "2024-01-01T00:00:00+00:00")
+    middle_id = insert("MIDDLE", "2025-01-01T00:00:00+00:00")
+    newer_id = insert("NEWER", "2026-01-01T00:00:00+00:00")
+
+    page = client.get(f"/items/{middle_id}")
+    assert page.status_code == 200
+    assert f'href="http://testserver/items/{newer_id}" rel="prev"' in page.text
+    assert f'href="http://testserver/items/{older_id}" rel="next"' in page.text
+    assert "View on Instagram" in page.text
+
+
+def test_archive_scan_state_can_be_changed_from_settings(client, app) -> None:
+    complete_setup(client, app)
+    page = client.get("/settings")
+    assert "Known-item cutoff state" in page.text
+    assert "Mark scan complete" in page.text
+
+    response = client.post(
+        "/settings/archive-scan",
+        data={"complete": "true", "csrf": csrf_from(page.text)},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert app.state.database.get_setting("archive_scan_complete") is True
+
+    page = client.get("/settings")
+    assert "Force next full scan" in page.text
+    response = client.post(
+        "/settings/archive-scan",
+        data={"complete": "false", "csrf": csrf_from(page.text)},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert app.state.database.get_setting("archive_scan_complete") is False
 
 
 def test_session_import_validate_and_remove(client, app, monkeypatch) -> None:

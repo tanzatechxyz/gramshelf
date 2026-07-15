@@ -109,6 +109,7 @@ class SettingsOut(BaseModel):
     legacy_import_path: str
     legacy_import_available: bool
     unknown_author_count: int
+    archive_scan_complete: bool
 
 
 class SettingsUpdate(BaseModel):
@@ -117,6 +118,7 @@ class SettingsUpdate(BaseModel):
     sync_enabled: bool | None = None
     sync_interval_minutes: int | None = Field(default=None, ge=15, le=10080)
     stop_after_known: int | None = Field(default=None, ge=1, le=50)
+    archive_scan_complete: bool | None = None
 
 
 class SessionStatusOut(BaseModel):

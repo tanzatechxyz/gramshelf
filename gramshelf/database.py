@@ -19,6 +19,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "last_sync_status": None,
     "last_sync_error": None,
     "archive_scan_complete": False,
+    "archive_scan_state_migrated": False,
 }
 
 
@@ -115,25 +116,33 @@ class Database:
             # full Saved-feed traversal had individual item errors. Promote
             # those completed syncs so the known-item cutoff works immediately
             # after upgrading instead of requiring one more full traversal.
-            previous_sync = connection.execute(
-                """
-                SELECT status FROM sync_runs
-                WHERE trigger IN ('web', 'api', 'schedule', 'manual')
-                ORDER BY id DESC LIMIT 1
-                """
+            migration_state = connection.execute(
+                "SELECT value FROM settings WHERE key = 'archive_scan_state_migrated'"
             ).fetchone()
-            archive_state = connection.execute(
-                "SELECT value FROM settings WHERE key = 'archive_scan_complete'"
-            ).fetchone()
-            if (
-                previous_sync is not None
-                and previous_sync["status"] == "completed_with_errors"
-                and archive_state is not None
-                and archive_state["value"] == "false"
-            ):
+            if migration_state is not None and migration_state["value"] == "false":
+                previous_sync = connection.execute(
+                    """
+                    SELECT status FROM sync_runs
+                    WHERE trigger IN ('web', 'api', 'schedule', 'manual')
+                    ORDER BY id DESC LIMIT 1
+                    """
+                ).fetchone()
+                archive_state = connection.execute(
+                    "SELECT value FROM settings WHERE key = 'archive_scan_complete'"
+                ).fetchone()
+                if (
+                    previous_sync is not None
+                    and previous_sync["status"] == "completed_with_errors"
+                    and archive_state is not None
+                    and archive_state["value"] == "false"
+                ):
+                    connection.execute(
+                        "UPDATE settings SET value = 'true' "
+                        "WHERE key = 'archive_scan_complete'"
+                    )
                 connection.execute(
                     "UPDATE settings SET value = 'true' "
-                    "WHERE key = 'archive_scan_complete'"
+                    "WHERE key = 'archive_scan_state_migrated'"
                 )
 
     def get_setting(self, key: str, default: Any = None) -> Any:
@@ -323,6 +332,30 @@ class Database:
         item = dict(row)
         item["media"] = [dict(media) for media in media_rows]
         return item
+
+    def get_item_neighbors(self, item_id: int) -> dict[str, int | None]:
+        """Return adjacent item IDs in the timeline's newest-first order."""
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT previous_id, next_id
+                FROM (
+                    SELECT
+                        id,
+                        LAG(id) OVER (ORDER BY published_at DESC, id DESC) AS previous_id,
+                        LEAD(id) OVER (ORDER BY published_at DESC, id DESC) AS next_id
+                    FROM items
+                ) ordered_items
+                WHERE id = ?
+                """,
+                (item_id,),
+            ).fetchone()
+        if row is None:
+            return {"previous_id": None, "next_id": None}
+        return {
+            "previous_id": int(row["previous_id"]) if row["previous_id"] is not None else None,
+            "next_id": int(row["next_id"]) if row["next_id"] is not None else None,
+        }
 
     def count_items(self) -> int:
         with self.connect() as connection:

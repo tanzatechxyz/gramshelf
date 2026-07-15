@@ -33,7 +33,7 @@ The administrator browser session is also accepted. JSON errors use FastAPI's st
 | `GET` | `/api/v1/sync/history` | Paginated synchronization history |
 | `GET` | `/api/v1/sync/history/{id}` | One run with its errors |
 | `GET` | `/api/v1/settings` | Read synchronization settings and API token |
-| `PATCH` | `/api/v1/settings` | Update any of `sync_enabled`, `sync_interval_minutes`, or `stop_after_known` |
+| `PATCH` | `/api/v1/settings` | Update synchronization settings and the archive-scan cutoff state |
 | `GET` | `/api/v1/diagnostics` | Storage, session, schedule, and recent error diagnostics |
 
 ## Item filters
@@ -55,10 +55,11 @@ Items are always ordered by `published_at` descending. Media URLs in API respons
 curl -X PATCH http://localhost:8080/api/v1/settings \
   -H "Authorization: Bearer gs_REPLACE_ME" \
   -H "Content-Type: application/json" \
-  -d '{"sync_enabled":true,"sync_interval_minutes":720,"stop_after_known":3}'
+  -d '{"sync_enabled":true,"sync_interval_minutes":720,"stop_after_known":3,"archive_scan_complete":true}'
 ```
 
 Intervals must be between 15 and 10,080 minutes. The known-item setting is between 1 and 50.
+Set `archive_scan_complete` to `false` to force the next synchronization to traverse the full Saved feed, or to `true` to enable the consecutive-known-item cutoff immediately.
 
 ## Create a session through the API
 

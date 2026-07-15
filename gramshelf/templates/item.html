@@ -9,7 +9,15 @@
       <h1>@{{ item.author }}</h1>
       <p>Published {{ item.published_at | datetime }}</p>
     </div>
-    <a class="button button-secondary" href="{{ item.instagram_url }}" target="_blank" rel="noopener noreferrer">View on Instagram</a>
+    <nav class="button-row" aria-label="Timeline item navigation">
+      {% if previous_item_id %}
+      <a class="button button-secondary" href="{{ url_for('item_page', item_id=previous_item_id) }}" rel="prev">← Previous</a>
+      {% endif %}
+      <a class="button button-secondary" href="{{ item.instagram_url }}" target="_blank" rel="noopener noreferrer">View on Instagram</a>
+      {% if next_item_id %}
+      <a class="button button-secondary" href="{{ url_for('item_page', item_id=next_item_id) }}" rel="next">Next →</a>
+      {% endif %}
+    </nav>
   </header>
 
   <div class="detail-gallery detail-gallery-{{ item.media | length }}">

@@ -43,6 +43,27 @@ def test_items_are_chronological_and_filterable(tmp_path: Path) -> None:
     assert detail["media"][0]["relative_path"] == "NEW2/NEW2.jpg"
 
 
+def test_item_neighbors_follow_timeline_order(tmp_path: Path) -> None:
+    database = Database(tmp_path / "db.sqlite3")
+    database.initialize()
+    older_id = add_item(database, "OLDER", "alice", "2024-01-01T00:00:00+00:00")
+    middle_id = add_item(database, "MIDDLE", "alice", "2025-01-01T00:00:00+00:00")
+    newer_id = add_item(database, "NEWER", "alice", "2026-01-01T00:00:00+00:00")
+
+    assert database.get_item_neighbors(newer_id) == {
+        "previous_id": None,
+        "next_id": middle_id,
+    }
+    assert database.get_item_neighbors(middle_id) == {
+        "previous_id": newer_id,
+        "next_id": older_id,
+    }
+    assert database.get_item_neighbors(older_id) == {
+        "previous_id": middle_id,
+        "next_id": None,
+    }
+
+
 def test_sync_history_records_errors(tmp_path: Path) -> None:
     database = Database(tmp_path / "db.sqlite3")
     database.initialize()
@@ -82,7 +103,13 @@ def test_upgrade_restores_cutoff_after_completed_sync_with_item_errors(
         error_count=2,
     )
     database.set_settings({"archive_scan_complete": False})
+    database.set_settings({"archive_scan_state_migrated": False})
 
     database.initialize()
 
     assert database.get_setting("archive_scan_complete") is True
+    assert database.get_setting("archive_scan_state_migrated") is True
+
+    database.set_settings({"archive_scan_complete": False})
+    database.initialize()
+    assert database.get_setting("archive_scan_complete") is False

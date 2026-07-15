@@ -117,3 +117,30 @@ def test_sync_keeps_running_after_item_error(tmp_path: Path) -> None:
     assert result["errors"][0]["shortcode"] == "BROKEN1"
     assert database.get_setting("archive_scan_complete") is False
     FakeClient.fail_shortcode = None
+
+
+def test_test_sync_downloads_at_most_three_items(tmp_path: Path) -> None:
+    database, manager, _ = configured_manager(tmp_path)
+    FakeClient.fail_shortcode = None
+    FakeClient.posts = [
+        FakePost(
+            f"ITEM{index}",
+            "alice",
+            f"item {index}",
+            datetime(2025, 1, index, tzinfo=UTC),
+        )
+        for index in range(1, 6)
+    ]
+
+    started, run = manager.start("test", max_downloads=3)
+    assert started
+    manager.wait(3)
+
+    result = database.get_sync_run(run["id"])
+    assert result is not None
+    assert result["status"] == "success"
+    assert result["downloaded_count"] == 3
+    assert result["discovered_count"] == 3
+    assert "test limit reached" in result["message"]
+    assert database.count_items() == 3
+    assert database.get_setting("archive_scan_complete") is False

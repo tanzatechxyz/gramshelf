@@ -7,12 +7,18 @@
     <h1>Activity</h1>
     <p>Recent runs, progress, and errors.</p>
   </div>
-  <form action="{{ url_for('manual_sync') }}" method="post">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <button class="button button-primary" type="submit" {% if sync_status.running %}disabled{% endif %}>
-      {% if sync_status.running %}Synchronization running{% else %}Synchronize now{% endif %}
-    </button>
-  </form>
+  <div class="button-row">
+    <form action="{{ url_for('test_sync_web') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="button button-secondary" type="submit" {% if sync_status.running %}disabled{% endif %}>Test download (max 3)</button>
+    </form>
+    <form action="{{ url_for('manual_sync') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="button button-primary" type="submit" {% if sync_status.running %}disabled{% endif %}>
+        {% if sync_status.running %}Synchronization running{% else %}Synchronize now{% endif %}
+      </button>
+    </form>
+  </div>
 </section>
 
 {% if sync_status.running %}
@@ -62,7 +68,7 @@
 <section class="empty-state">
   <div class="empty-icon" aria-hidden="true">↻</div>
   <h2>No synchronizations yet</h2>
-  <p>Import an Instagram session in Settings, then start a manual synchronization.</p>
+  <p>Create or import an Instagram session in Settings, then start a manual synchronization.</p>
 </section>
 {% endif %}
 {% endblock %}

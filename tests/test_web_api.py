@@ -33,6 +33,9 @@ def test_setup_login_and_api_auth(client, app) -> None:
     schema = client.get("/api/openapi.json", headers={"Authorization": f"Bearer {token}"})
     assert schema.status_code == 200
     assert "/api/v1/items" in schema.json()["paths"]
+    assert "/api/v1/instagram/session/login" in schema.json()["paths"]
+    assert "/api/v1/instagram/session/two-factor" in schema.json()["paths"]
+    assert "/api/v1/sync/test" in schema.json()["paths"]
 
 
 def test_timeline_search_and_item_api(client, app, config) -> None:
@@ -89,6 +92,94 @@ def test_session_import_validate_and_remove(client, app, monkeypatch) -> None:
     response = client.delete("/api/v1/instagram/session")
     assert response.status_code == 200
     assert not app.state.config.session_path.exists()
+
+
+def test_web_ui_can_create_session_from_credentials(client, app, config, monkeypatch) -> None:
+    complete_setup(client, app)
+    manager = app.state.session_login_manager
+
+    def create_session(username: str, password: str):
+        assert password == "one-time-password"
+        config.session_path.write_bytes(b"created session")
+        return {"username": username, "two_factor_required": False}
+
+    monkeypatch.setattr(manager, "start", create_session)
+    page = client.get("/settings")
+    assert "Create in GramShelf" in page.text
+    assert "Test download (max 3)" not in page.text
+
+    response = client.post(
+        "/settings/session/login",
+        data={
+            "username": "archive_user",
+            "password": "one-time-password",
+            "csrf": csrf_from(page.text),
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert config.session_path.read_bytes() == b"created session"
+    assert app.state.database.get_setting("instagram_username") == "archive_user"
+    assert "Test download (max 3)" in client.get("/settings").text
+
+
+def test_api_session_login_supports_two_factor(client, app, config, monkeypatch) -> None:
+    complete_setup(client, app)
+    manager = app.state.session_login_manager
+    pending = {"username": None}
+
+    def begin(username: str, password: str):
+        assert password == "one-time-password"
+        pending["username"] = username
+        return {"username": username, "two_factor_required": True}
+
+    def pending_username():
+        return pending["username"]
+
+    def complete(code: str):
+        assert code == "123456"
+        username = str(pending["username"])
+        pending["username"] = None
+        config.session_path.write_bytes(b"two-factor session")
+        return username
+
+    monkeypatch.setattr(manager, "start", begin)
+    monkeypatch.setattr(manager, "pending_username", pending_username)
+    monkeypatch.setattr(manager, "complete_two_factor", complete)
+
+    response = client.post(
+        "/api/v1/instagram/session/login",
+        json={"username": "archive_user", "password": "one-time-password"},
+    )
+    assert response.status_code == 200
+    assert response.json()["login_pending"] is True
+    assert response.json()["pending_username"] == "archive_user"
+    settings_page = client.get("/settings")
+    assert "Enter the Instagram verification code" in settings_page.text
+
+    response = client.post(
+        "/api/v1/instagram/session/two-factor", json={"code": "123456"}
+    )
+    assert response.status_code == 200
+    assert response.json()["configured"] is True
+    assert response.json()["login_pending"] is False
+    assert response.json()["username"] == "archive_user"
+
+
+def test_test_sync_endpoint_uses_three_item_limit(client, app, monkeypatch) -> None:
+    complete_setup(client, app)
+    calls = []
+
+    def start(trigger: str, max_downloads=None):
+        calls.append((trigger, max_downloads))
+        return True, {"id": 99, "status": "queued"}
+
+    monkeypatch.setattr(app.state.sync_manager, "start", start)
+    response = client.post("/api/v1/sync/test")
+
+    assert response.status_code == 202
+    assert response.json()["started"] is True
+    assert calls == [("test", 3)]
 
 
 def test_csrf_rejects_invalid_form(client, app) -> None:

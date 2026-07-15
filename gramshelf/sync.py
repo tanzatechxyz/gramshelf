@@ -47,7 +47,11 @@ class SyncManager:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
 
-    def start(self, trigger: str) -> tuple[bool, dict[str, Any]]:
+    def start(
+        self, trigger: str, max_downloads: int | None = None
+    ) -> tuple[bool, dict[str, Any]]:
+        if max_downloads is not None and max_downloads < 1:
+            raise ValueError("max_downloads must be at least one")
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 current = self.database.current_sync_run() or {"status": "running"}
@@ -58,7 +62,7 @@ class SyncManager:
             run_id = self.database.create_sync_run(trigger)
             self._thread = threading.Thread(
                 target=self._execute,
-                args=(run_id,),
+                args=(run_id, max_downloads),
                 name=f"gramshelf-sync-{run_id}",
                 daemon=True,
             )
@@ -82,7 +86,7 @@ class SyncManager:
             return result
         return {"running": False, "status": "never_run"}
 
-    def _execute(self, run_id: int) -> None:
+    def _execute(self, run_id: int, max_downloads: int | None = None) -> None:
         started_at = utc_now()
         self.database.update_sync_run(run_id, status="running", started_at=started_at)
         counts = {"discovered_count": 0, "downloaded_count": 0, "skipped_count": 0, "error_count": 0}
@@ -94,6 +98,7 @@ class SyncManager:
         stop_after_known = max(1, int(self.database.get_setting("stop_after_known", 3)))
         can_stop_at_known = bool(self.database.get_setting("archive_scan_complete", False))
         known_streak = 0
+        stopped_at_download_limit = False
         client = self.client_factory(username, self.config.session_path, self.config.media_dir)
         try:
             client.connect()
@@ -140,6 +145,9 @@ class SyncManager:
                     counts["error_count"] += 1
                     self.database.add_sync_error(run_id, str(exc), shortcode)
                 self._update_progress(run_id, counts)
+                if max_downloads is not None and counts["downloaded_count"] >= max_downloads:
+                    stopped_at_download_limit = True
+                    break
         except Exception as exc:
             self.database.add_sync_error(run_id, str(exc))
             counts["error_count"] += 1
@@ -152,10 +160,14 @@ class SyncManager:
                 pass
 
         status = "completed_with_errors" if counts["error_count"] else "success"
+        limit_message = " (test limit reached)" if stopped_at_download_limit else ""
         message = (
             f"Downloaded {counts['downloaded_count']}, skipped {counts['skipped_count']}, "
-            f"errors {counts['error_count']}"
+            f"errors {counts['error_count']}{limit_message}"
         )
+        archive_scan_complete = not bool(counts["error_count"])
+        if stopped_at_download_limit:
+            archive_scan_complete = can_stop_at_known and archive_scan_complete
         completed_at = utc_now()
         self.database.update_sync_run(
             run_id,
@@ -169,7 +181,7 @@ class SyncManager:
                 "last_sync_at": completed_at,
                 "last_sync_status": status,
                 "last_sync_error": None if not counts["error_count"] else message,
-                "archive_scan_complete": not bool(counts["error_count"]),
+                "archive_scan_complete": archive_scan_complete,
             }
         )
 

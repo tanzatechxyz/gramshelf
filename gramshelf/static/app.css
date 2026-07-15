@@ -325,6 +325,12 @@ input::placeholder { color: color-mix(in srgb, var(--text-muted) 65%, transparen
 .panel-heading p { margin-top: 0.2rem; color: var(--text-muted); font-size: 0.9rem; }
 .panel hr { height: 1px; margin: 1.5rem 0; border: 0; background: var(--border); }
 .inline-form { display: grid; grid-template-columns: 1fr 1.4fr auto; align-items: end; gap: 0.75rem; }
+.verification-form { grid-template-columns: minmax(200px, 1fr) auto; margin-top: 1rem; }
+.session-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.session-method { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--surface-muted); }
+.session-method h3 { margin-bottom: 0.35rem; }
+.session-method > p { color: var(--text-muted); font-size: 0.88rem; }
+.session-method .button { justify-self: start; }
 .toggle-label { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.85rem; border: 1px solid var(--border); border-radius: var(--radius-small); cursor: pointer; }
 .toggle-label input { width: 1.1rem; height: 1.1rem; margin-top: 0.15rem; accent-color: var(--accent); }
 .toggle-label span { display: grid; gap: 0.16rem; }
@@ -388,6 +394,7 @@ code { padding: 0.08rem 0.3rem; border-radius: 0.3rem; background: var(--surface
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .panel-wide { grid-column: auto; }
   .inline-form { grid-template-columns: minmax(0, 1fr); }
+  .session-methods { grid-template-columns: minmax(0, 1fr); }
   .run-card summary { grid-template-columns: auto 1fr auto; }
   .run-card summary time { display: none; }
 }

@@ -32,7 +32,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import __version__
 from .config import AppConfig
 from .database import Database, utc_now
-from .instagram import InstaloaderClient, InstagramSessionError, validate_session
+from .instagram import (
+    InstaloaderClient,
+    InstagramSessionError,
+    SessionLoginManager,
+    validate_session,
+)
 from .scheduler import SchedulerController
 from .schemas import (
     AppStatusOut,
@@ -40,7 +45,9 @@ from .schemas import (
     ItemListOut,
     ItemOut,
     MessageOut,
+    SessionLoginIn,
     SessionStatusOut,
+    SessionTwoFactorIn,
     SettingsOut,
     SettingsUpdate,
     SyncRunOut,
@@ -91,6 +98,7 @@ def create_app(
     secret = config.load_or_create_secret()
     sync_manager = SyncManager(database, config, client_factory=client_factory)
     scheduler = SchedulerController(database, sync_manager)
+    session_login_manager = SessionLoginManager(config.session_path, config.media_dir)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -100,6 +108,7 @@ def create_app(
             yield
         finally:
             scheduler.shutdown()
+            session_login_manager.cancel()
 
     app = FastAPI(
         title="GramShelf API",
@@ -129,6 +138,7 @@ def create_app(
     app.state.database = database
     app.state.sync_manager = sync_manager
     app.state.scheduler = scheduler
+    app.state.session_login_manager = session_login_manager
 
     templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
     templates.env.filters["datetime"] = _format_datetime
@@ -236,6 +246,7 @@ def create_app(
 
     def settings_payload(request: Request) -> dict[str, Any]:
         values = db_from(request).get_settings()
+        pending_username = session_login_manager.pending_username()
         return {
             "sync_enabled": bool(values.get("sync_enabled", True)),
             "sync_interval_minutes": int(values.get("sync_interval_minutes", 720)),
@@ -244,6 +255,8 @@ def create_app(
             "session_configured": config.session_path.is_file(),
             "session_last_validated_at": values.get("session_last_validated_at"),
             "session_last_error": values.get("session_last_error"),
+            "login_pending": pending_username is not None,
+            "pending_username": pending_username,
             "api_token": str(values.get("api_token", "")),
             "next_scheduled_sync": scheduler.next_run_at(),
         }
@@ -252,12 +265,24 @@ def create_app(
         values = db_from(request).get_settings(
             ["instagram_username", "session_last_validated_at", "session_last_error"]
         )
+        pending_username = session_login_manager.pending_username()
         return {
             "configured": config.session_path.is_file(),
             "username": str(values.get("instagram_username", "")),
             "last_validated_at": values.get("session_last_validated_at"),
             "last_error": values.get("session_last_error"),
+            "login_pending": pending_username is not None,
+            "pending_username": pending_username,
         }
+
+    def record_created_session(username: str) -> None:
+        database.set_settings(
+            {
+                "instagram_username": username,
+                "session_last_validated_at": utc_now(),
+                "session_last_error": None,
+            }
+        )
 
     def store_and_validate_session(username: str, content: bytes) -> str:
         username = username.strip().lstrip("@")
@@ -280,19 +305,14 @@ def create_app(
         except Exception:
             temporary.unlink(missing_ok=True)
             raise
-        database.set_settings(
-            {
-                "instagram_username": validated_username,
-                "session_last_validated_at": utc_now(),
-                "session_last_error": None,
-            }
-        )
+        session_login_manager.cancel()
+        record_created_session(validated_username)
         return validated_username
 
     def validate_existing_session() -> str:
         username = str(database.get_setting("instagram_username", "")).strip()
         if not username or not config.session_path.is_file():
-            raise InstagramSessionError("No Instagram session has been imported")
+            raise InstagramSessionError("No Instagram session has been configured")
         try:
             validated_username = validate_session(username, config.session_path, config.media_dir)
         except Exception as exc:
@@ -308,6 +328,7 @@ def create_app(
         return validated_username
 
     def remove_session() -> None:
+        session_login_manager.cancel()
         config.session_path.unlink(missing_ok=True)
         database.set_settings(
             {
@@ -357,7 +378,7 @@ def create_app(
         request.session.clear()
         request.session["admin_authenticated"] = True
         request.session["admin_username"] = admin_username
-        flash(request, "Administrator account created. Import your Instagram session next.", "success")
+        flash(request, "Administrator account created. Connect your Instagram account next.", "success")
         return RedirectResponse(str(request.url_for("settings_page")), status_code=303)
 
     @app.get("/login", response_class=HTMLResponse, include_in_schema=False, name="login")
@@ -468,6 +489,24 @@ def create_app(
             flash(request, "A synchronization is already running.", "warning")
         return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
 
+    @app.post("/sync/test", include_in_schema=False, name="test_sync_web")
+    def test_sync_web(
+        request: Request,
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        started, run = sync_manager.start("test", max_downloads=3)
+        if started:
+            flash(
+                request,
+                f"Test synchronization #{run.get('id')} started; it will download at most 3 items.",
+                "success",
+            )
+        else:
+            flash(request, "A synchronization is already running.", "warning")
+        return RedirectResponse(str(request.url_for("activity_page")), status_code=303)
+
     @app.get("/settings", response_class=HTMLResponse, include_in_schema=False, name="settings_page")
     def settings_page(request: Request, _: bool = Depends(require_web_admin)) -> HTMLResponse:
         return render(request, "settings.html", settings=settings_payload(request))
@@ -496,6 +535,62 @@ def create_app(
             )
             scheduler.refresh()
             flash(request, "Settings saved.", "success")
+        return RedirectResponse(str(request.url_for("settings_page")), status_code=303)
+
+    @app.post("/settings/session/login", include_in_schema=False, name="session_login_web")
+    async def session_login_web(
+        request: Request,
+        username: str = Form(...),
+        password: str = Form(...),
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        try:
+            result = await run_in_threadpool(session_login_manager.start, username, password)
+            if result["two_factor_required"]:
+                flash(
+                    request,
+                    f"Instagram requires a verification code for @{result['username']}.",
+                    "warning",
+                )
+            else:
+                record_created_session(str(result["username"]))
+                flash(
+                    request,
+                    f"Instagram session for @{result['username']} was created and saved.",
+                    "success",
+                )
+        except Exception as exc:
+            database.set_settings({"session_last_error": str(exc)[:4000]})
+            flash(request, str(exc), "error")
+        return RedirectResponse(str(request.url_for("settings_page")), status_code=303)
+
+    @app.post(
+        "/settings/session/two-factor",
+        include_in_schema=False,
+        name="session_two_factor_web",
+    )
+    async def session_two_factor_web(
+        request: Request,
+        code: str = Form(...),
+        csrf: str = Form(...),
+        _: bool = Depends(require_web_admin),
+    ) -> RedirectResponse:
+        verify_csrf(request, csrf)
+        try:
+            username = await run_in_threadpool(
+                session_login_manager.complete_two_factor, code
+            )
+            record_created_session(username)
+            flash(
+                request,
+                f"Instagram session for @{username} was created and saved.",
+                "success",
+            )
+        except Exception as exc:
+            database.set_settings({"session_last_error": str(exc)[:4000]})
+            flash(request, str(exc), "error")
         return RedirectResponse(str(request.url_for("settings_page")), status_code=303)
 
     @app.post("/settings/session", include_in_schema=False, name="session_upload_web")
@@ -660,6 +755,48 @@ def create_app(
         return session_payload(request)
 
     @app.post(
+        "/api/v1/instagram/session/login",
+        response_model=SessionStatusOut,
+        tags=["Instagram session"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    async def api_session_login(
+        request: Request, credentials: SessionLoginIn
+    ) -> dict[str, Any]:
+        try:
+            result = await run_in_threadpool(
+                session_login_manager.start,
+                credentials.username,
+                credentials.password.get_secret_value(),
+            )
+            if not result["two_factor_required"]:
+                record_created_session(str(result["username"]))
+        except Exception as exc:
+            database.set_settings({"session_last_error": str(exc)[:4000]})
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return session_payload(request)
+
+    @app.post(
+        "/api/v1/instagram/session/two-factor",
+        response_model=SessionStatusOut,
+        tags=["Instagram session"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    async def api_session_two_factor(
+        request: Request, verification: SessionTwoFactorIn
+    ) -> dict[str, Any]:
+        try:
+            username = await run_in_threadpool(
+                session_login_manager.complete_two_factor,
+                verification.code.get_secret_value(),
+            )
+            record_created_session(username)
+        except Exception as exc:
+            database.set_settings({"session_last_error": str(exc)[:4000]})
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return session_payload(request)
+
+    @app.post(
         "/api/v1/instagram/session",
         response_model=SessionStatusOut,
         tags=["Instagram session"],
@@ -710,6 +847,17 @@ def create_app(
     )
     def api_sync_start() -> dict[str, Any]:
         started, run = sync_manager.start("api")
+        return {"started": started, "run": run}
+
+    @app.post(
+        "/api/v1/sync/test",
+        response_model=SyncStartOut,
+        status_code=202,
+        tags=["Synchronization"],
+        dependencies=[Depends(require_api_auth)],
+    )
+    def api_test_sync_start() -> dict[str, Any]:
+        started, run = sync_manager.start("test", max_downloads=3)
         return {"started": started, "run": run}
 
     @app.get(

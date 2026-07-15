@@ -11,6 +11,7 @@ It is designed for a single Docker container on a home server such as TrueNAS SC
 - Stores the author, caption, original URL, publication time, download time, and media type.
 - Shows a responsive publication-date timeline with search, author/type/date filters, and item details.
 - Runs on a configurable interval or on demand from the UI and API.
+- Provides a three-item test synchronization before running a full import.
 - Records synchronization progress, history, and per-item errors.
 - Provides an administrator login, setup flow, session management, diagnostics, and an OpenAPI-documented HTTP API.
 
@@ -31,20 +32,24 @@ GramShelf intentionally has one administrator, one Instagram account, SQLite, an
    docker compose up -d --build
    ```
 
-3. Open `http://YOUR_SERVER:8080`, create the administrator, and import an Instaloader session from Settings.
+3. Open `http://YOUR_SERVER:8080`, create the administrator, and create or import an Instaloader session from Settings.
 
 The container mounts application state at `/data` and downloaded media at `/media`. Back up both folders together.
 
-## Create an Instagram session
+## Connect Instagram
 
-Create the session on a trusted computer. This keeps your Instagram password out of GramShelf:
+On Settings, enter your Instagram username and password to have GramShelf create the Instaloader session. The password is used only for that login request and is never stored. If Instagram requests two-factor authentication, enter the verification code in the follow-up form within 10 minutes.
+
+Only submit Instagram credentials over HTTPS or a trusted private network. Direct Instagram logins can be fragile, so session-file import remains available as the reliable fallback.
+
+To create the session on a trusted computer instead:
 
 ```bash
 python -m pip install "instaloader>=4.15.2,<5"
 instaloader --login YOUR_USERNAME
 ```
 
-Complete any Instagram prompt, then upload Instaloader's generated `session-YOUR_USERNAME` file on GramShelf's Settings page. GramShelf immediately validates the uploaded session with Instaloader before replacing the currently stored session.
+Complete any Instagram prompt, then upload Instaloader's generated `session-YOUR_USERNAME` file on GramShelf's Settings page. GramShelf validates the uploaded session before replacing the currently stored session.
 
 Session files contain authentication cookies. Treat them as secrets and only upload a file you generated yourself. Instagram is an unofficial and changeable integration: sessions can expire, Saved-feed access can break when Instagram changes its private interfaces, and aggressive schedules can cause rate limits. The default 12-hour interval is deliberately conservative.
 
@@ -90,12 +95,14 @@ GRAMSHELF_DATA_DIR=./dev-data GRAMSHELF_MEDIA_DIR=./dev-media gramshelf
 
 ## Packaging
 
-The included GitHub Actions workflow tests the project and publishes a multi-architecture container to GitHub Container Registry on pushes to `main` and version tags. Published images use:
+The included GitHub Actions workflow tests the project and publishes a multi-architecture container to GitHub Container Registry on pushes to `main` and version tags. Main-branch images use:
 
 ```text
 ghcr.io/tanzatechxyz/gramshelf:latest
-ghcr.io/tanzatechxyz/gramshelf:0.1.0
+ghcr.io/tanzatechxyz/gramshelf:main
 ```
+
+A tag such as `v0.2.0` also publishes `0.2.0` and `0.2` image tags.
 
 ## Security and privacy
 

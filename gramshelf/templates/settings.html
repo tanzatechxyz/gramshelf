@@ -12,21 +12,41 @@
     <div class="panel-heading">
       <div>
         <h2>Instagram session</h2>
-        <p>GramShelf uses an existing Instaloader session and never stores your Instagram password.</p>
+        <p>Create an Instaloader session here or import one you already made. GramShelf never saves your Instagram password.</p>
       </div>
-      {% if settings.session_configured %}<span class="status-pill {% if settings.session_last_error %}status-error{% else %}status-success{% endif %}">{% if settings.session_last_error %}Needs attention{% else %}Configured{% endif %}</span>{% else %}<span class="status-pill status-never_run">Not configured</span>{% endif %}
+      {% if settings.login_pending %}<span class="status-pill status-completed_with_errors">Verification needed</span>{% elif settings.session_configured %}<span class="status-pill {% if settings.session_last_error %}status-error{% else %}status-success{% endif %}">{% if settings.session_last_error %}Needs attention{% else %}Configured{% endif %}</span>{% else %}<span class="status-pill status-never_run">Not configured</span>{% endif %}
     </div>
+
+    {% if settings.login_pending %}
+    <div class="callout">
+      <strong>Enter the Instagram verification code for @{{ settings.pending_username }}</strong>
+      <p>The pending login expires after 10 minutes or when the container restarts.</p>
+      <form action="{{ url_for('session_two_factor_web') }}" method="post" class="inline-form verification-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>
+          <span>Verification code</span>
+          <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="32" required autofocus>
+        </label>
+        <button class="button button-primary" type="submit">Verify and save session</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if settings.session_last_error %}<div class="flash flash-error">{{ settings.session_last_error }}</div>{% endif %}
 
     {% if settings.session_configured %}
     <dl class="metadata-list compact-list">
       <div><dt>Account</dt><dd>@{{ settings.instagram_username }}</dd></div>
       <div><dt>Last validated</dt><dd>{{ settings.session_last_validated_at | datetime }}</dd></div>
     </dl>
-    {% if settings.session_last_error %}<div class="flash flash-error">{{ settings.session_last_error }}</div>{% endif %}
     <div class="button-row">
       <form action="{{ url_for('session_validate_web') }}" method="post">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="button button-secondary" type="submit">Validate session</button>
+      </form>
+      <form action="{{ url_for('test_sync_web') }}" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="button button-secondary" type="submit" {% if sync_status.running %}disabled{% endif %}>Test download (max 3)</button>
       </form>
       <form action="{{ url_for('session_remove_web') }}" method="post" data-confirm="Remove the Instagram session? Your downloaded archive will be kept.">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -35,26 +55,45 @@
     </div>
     <hr>
     <h3>Replace session</h3>
-    {% else %}
-    <div class="callout">
-      <strong>Create a session on a trusted computer</strong>
-      <p>Run <code>instaloader --login YOUR_USERNAME</code>, complete Instagram’s login prompts, then upload the generated <code>session-YOUR_USERNAME</code> file here.</p>
-    </div>
     {% endif %}
 
-    <form action="{{ url_for('session_upload_web') }}" method="post" enctype="multipart/form-data" class="inline-form session-form">
-      <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <label>
-        <span>Instagram username</span>
-        <input type="text" name="username" value="{{ settings.instagram_username }}" placeholder="your_username" autocomplete="off" required>
-      </label>
-      <label class="file-label">
-        <span>Instaloader session file</span>
-        <input type="file" name="session_file" accept=".json,.txt,application/octet-stream" required>
-      </label>
-      <button class="button button-primary" type="submit">Upload and validate</button>
-    </form>
-    <p class="field-help">Only upload a session file you created yourself. Validation contacts Instagram and may take a few seconds.</p>
+    <div class="session-methods">
+      <div class="session-method">
+        <h3>Create in GramShelf</h3>
+        <p>Sign in once with Instaloader. Your password is used for this request only; the resulting session cookie is stored in <code>/data</code>.</p>
+        <form action="{{ url_for('session_login_web') }}" method="post" class="stacked-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <label>
+            <span>Instagram username</span>
+            <input type="text" name="username" value="{{ settings.pending_username or settings.instagram_username }}" placeholder="your_username" autocomplete="username" maxlength="31" required>
+          </label>
+          <label>
+            <span>Instagram password</span>
+            <input type="password" name="password" autocomplete="current-password" maxlength="512" required>
+          </label>
+          <button class="button button-primary" type="submit">Create session</button>
+        </form>
+        <p class="field-help">Use this only over HTTPS or on a trusted private network. Two-factor authentication is supported.</p>
+      </div>
+
+      <div class="session-method">
+        <h3>Import an existing session</h3>
+        <p>For the most reliable setup, create a session on a trusted computer with <code>instaloader --login YOUR_USERNAME</code>, then upload it.</p>
+        <form action="{{ url_for('session_upload_web') }}" method="post" enctype="multipart/form-data" class="stacked-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <label>
+            <span>Instagram username</span>
+            <input type="text" name="username" value="{{ settings.instagram_username }}" placeholder="your_username" autocomplete="username" maxlength="31" required>
+          </label>
+          <label class="file-label">
+            <span>Instaloader session file</span>
+            <input type="file" name="session_file" accept=".json,.txt,application/octet-stream" required>
+          </label>
+          <button class="button button-secondary" type="submit">Upload and validate</button>
+        </form>
+        <p class="field-help">Only upload a session file you created yourself. Validation contacts Instagram.</p>
+      </div>
+    </div>
   </section>
 
   <section class="panel">

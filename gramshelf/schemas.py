@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class HealthResponse(BaseModel):
@@ -96,6 +96,8 @@ class SettingsOut(BaseModel):
     session_configured: bool
     session_last_validated_at: str | None
     session_last_error: str | None
+    login_pending: bool
+    pending_username: str | None
     api_token: str
     next_scheduled_sync: str | None
 
@@ -113,6 +115,21 @@ class SessionStatusOut(BaseModel):
     username: str
     last_validated_at: str | None
     last_error: str | None
+    login_pending: bool = False
+    pending_username: str | None = None
+
+
+class SessionLoginIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=31)
+    password: SecretStr = Field(min_length=1, max_length=512)
+
+
+class SessionTwoFactorIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: SecretStr = Field(min_length=1, max_length=32)
 
 
 class AppStatusOut(BaseModel):

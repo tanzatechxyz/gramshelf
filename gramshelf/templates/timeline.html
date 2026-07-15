@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Timeline · GramShelf{% endblock %}
+{% block content %}
+<section class="page-heading split-heading">
+  <div>
+    <div class="eyebrow">Archive</div>
+    <h1>Saved timeline</h1>
+    <p>{{ total }} archived item{% if total != 1 %}s{% endif %}, newest publication first.</p>
+  </div>
+  <form action="{{ url_for('manual_sync') }}" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="button button-primary" type="submit" {% if sync_status.running %}disabled{% endif %}>
+      {% if sync_status.running %}Synchronization running{% else %}Synchronize now{% endif %}
+    </button>
+  </form>
+</section>
+
+<form class="filter-bar" method="get" action="{{ url_for('timeline') }}">
+  <label class="filter-search">
+    <span>Search</span>
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Caption, author, or shortcode">
+  </label>
+  <label>
+    <span>Author</span>
+    <select name="author">
+      <option value="">All authors</option>
+      {% for value in authors %}<option value="{{ value }}" {% if filters.author == value %}selected{% endif %}>@{{ value }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>Type</span>
+    <select name="media_type">
+      <option value="">All media</option>
+      <option value="image" {% if filters.media_type == 'image' %}selected{% endif %}>Images</option>
+      <option value="video" {% if filters.media_type == 'video' %}selected{% endif %}>Videos</option>
+      <option value="carousel" {% if filters.media_type == 'carousel' %}selected{% endif %}>Carousels</option>
+    </select>
+  </label>
+  <label>
+    <span>From</span>
+    <input type="date" name="date_from" value="{{ filters.date_from }}">
+  </label>
+  <label>
+    <span>To</span>
+    <input type="date" name="date_to" value="{{ filters.date_to }}">
+  </label>
+  <div class="filter-actions">
+    <button class="button button-secondary" type="submit">Apply</button>
+    {% if filters.q or filters.author or filters.media_type or filters.date_from or filters.date_to %}<a class="button button-ghost" href="{{ url_for('timeline') }}">Clear</a>{% endif %}
+  </div>
+</form>
+
+{% if items %}
+<div class="timeline-grid">
+  {% for item in items %}
+  <article class="timeline-card">
+    <a class="media-frame" href="{{ url_for('item_page', item_id=item.id) }}" aria-label="View item by {{ item.author }}">
+      {% if item.cover_path %}
+        {% if item.cover_path.lower().endswith(('.mp4', '.mov', '.m4v')) %}
+        <video src="{{ url_for('media_file', path=item.cover_path) }}" muted playsinline preload="metadata"></video>
+        {% else %}
+        <img src="{{ url_for('media_file', path=item.cover_path) }}" alt="" loading="lazy">
+        {% endif %}
+      {% else %}
+      <span class="media-placeholder">No preview</span>
+      {% endif %}
+      <span class="media-badge">{{ item.media_type }}{% if item.media_count > 1 %} · {{ item.media_count }}{% endif %}</span>
+    </a>
+    <div class="timeline-card-body">
+      <div class="card-meta"><strong>@{{ item.author }}</strong><time datetime="{{ item.published_at }}">{{ item.published_at | datetime }}</time></div>
+      {% if item.caption %}<p>{{ item.caption | excerpt }}</p>{% else %}<p class="muted">No caption</p>{% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+{% if previous_url or next_url %}
+<nav class="pagination" aria-label="Timeline pages">
+  {% if previous_url %}<a class="button button-secondary" href="{{ previous_url }}">Previous</a>{% else %}<span></span>{% endif %}
+  <span>Page {{ page }}</span>
+  {% if next_url %}<a class="button button-secondary" href="{{ next_url }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<section class="empty-state">
+  <div class="empty-icon" aria-hidden="true">◎</div>
+  <h2>{% if filters.q or filters.author or filters.media_type or filters.date_from or filters.date_to %}Nothing matches these filters{% else %}Your shelf is empty{% endif %}</h2>
+  <p>{% if filters.q or filters.author or filters.media_type or filters.date_from or filters.date_to %}Try clearing one or more filters.{% else %}Import a valid Instagram session in Settings, then start your first synchronization.{% endif %}</p>
+  {% if not (filters.q or filters.author or filters.media_type or filters.date_from or filters.date_to) %}<a class="button button-secondary" href="{{ url_for('settings_page') }}">Open settings</a>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

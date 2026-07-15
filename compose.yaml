@@ -1,0 +1,27 @@
+services:
+  gramshelf:
+    image: ghcr.io/tanzatechxyz/gramshelf:latest
+    build: .
+    user: "${PUID:-568}:${PGID:-568}"
+    restart: unless-stopped
+    ports:
+      - "${GRAMSHELF_PORT:-8080}:8080"
+    environment:
+      GRAMSHELF_DATA_DIR: /data
+      GRAMSHELF_MEDIA_DIR: /media
+      GRAMSHELF_SECURE_COOKIES: "${GRAMSHELF_SECURE_COOKIES:-false}"
+      GRAMSHELF_ROOT_PATH: "${GRAMSHELF_ROOT_PATH:-}"
+      GRAMSHELF_FORWARDED_ALLOW_IPS: "${GRAMSHELF_FORWARDED_ALLOW_IPS:-127.0.0.1}"
+    volumes:
+      - "${GRAMSHELF_DATA_PATH:-./data}:/data"
+      - "${GRAMSHELF_MEDIA_PATH:-./media}:/media"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 15s

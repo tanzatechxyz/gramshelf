@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Set up GramShelf{% endblock %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card">
+    <div class="eyebrow">First run</div>
+    <h1>Set up your archive</h1>
+    <p class="lede">Create the single administrator account. You’ll import an Instaloader session on the next screen.</p>
+    {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
+    <form action="{{ url_for('setup_submit') }}" method="post" class="stacked-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>
+        Administrator name
+        <input type="text" name="admin_username" autocomplete="username" maxlength="64" required autofocus>
+      </label>
+      <label>
+        Password
+        <input type="password" name="password" autocomplete="new-password" minlength="12" required>
+        <span class="field-help">Use at least 12 characters.</span>
+      </label>
+      <label>
+        Confirm password
+        <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" required>
+      </label>
+      <button class="button button-primary" type="submit">Create administrator</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

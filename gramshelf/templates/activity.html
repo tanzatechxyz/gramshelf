@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Synchronization activity · GramShelf{% endblock %}
+{% block content %}
+<section class="page-heading split-heading">
+  <div>
+    <div class="eyebrow">Synchronization</div>
+    <h1>Activity</h1>
+    <p>Recent runs, progress, and errors.</p>
+  </div>
+  <form action="{{ url_for('manual_sync') }}" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="button button-primary" type="submit" {% if sync_status.running %}disabled{% endif %}>
+      {% if sync_status.running %}Synchronization running{% else %}Synchronize now{% endif %}
+    </button>
+  </form>
+</section>
+
+{% if sync_status.running %}
+<section class="live-status" data-reload-when-sync-complete>
+  <span class="pulse" aria-hidden="true"></span>
+  <div>
+    <strong>Synchronization #{{ sync_status.id }} is running</strong>
+    <p>{{ sync_status.discovered_count }} discovered · {{ sync_status.downloaded_count }} downloaded · {{ sync_status.skipped_count }} already archived</p>
+  </div>
+</section>
+{% endif %}
+
+{% if runs %}
+<div class="run-list">
+  {% for run in runs %}
+  <details class="run-card" {% if loop.first %}open{% endif %}>
+    <summary>
+      <span class="status-dot status-{{ run.status }}" aria-hidden="true"></span>
+      <span class="run-title">Run #{{ run.id }} · {{ run.trigger | title }}</span>
+      <span class="run-status">{{ run.status | replace('_', ' ') | title }}</span>
+      <time datetime="{{ run.started_at or '' }}">{{ (run.started_at or run.completed_at) | datetime }}</time>
+    </summary>
+    <div class="run-body">
+      <div class="stat-grid">
+        <div><strong>{{ run.discovered_count }}</strong><span>Discovered</span></div>
+        <div><strong>{{ run.downloaded_count }}</strong><span>Downloaded</span></div>
+        <div><strong>{{ run.skipped_count }}</strong><span>Duplicates</span></div>
+        <div><strong>{{ run.error_count }}</strong><span>Errors</span></div>
+      </div>
+      {% if run.message %}<p class="run-message">{{ run.message }}</p>{% endif %}
+      {% if run.errors %}
+      <div class="error-list">
+        <h3>Errors</h3>
+        {% for error in run.errors %}
+        <div class="error-row">
+          <div><strong>{% if error.shortcode %}{{ error.shortcode }}{% else %}Synchronization{% endif %}</strong><time>{{ error.occurred_at | datetime }}</time></div>
+          <p>{{ error.message }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<section class="empty-state">
+  <div class="empty-icon" aria-hidden="true">↻</div>
+  <h2>No synchronizations yet</h2>
+  <p>Import an Instagram session in Settings, then start a manual synchronization.</p>
+</section>
+{% endif %}
+{% endblock %}

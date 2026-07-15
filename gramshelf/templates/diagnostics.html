@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics · GramShelf{% endblock %}
+{% block content %}
+<section class="page-heading split-heading">
+  <div>
+    <div class="eyebrow">Maintenance</div>
+    <h1>Diagnostics</h1>
+    <p>Local storage, session state, and recent errors.</p>
+  </div>
+  <a class="button button-secondary" href="{{ url_for('api_health') }}" target="_blank">Open health endpoint</a>
+</section>
+
+<div class="diagnostic-grid">
+  <div class="metric-card"><span>Archived items</span><strong>{{ diagnostics.item_count }}</strong></div>
+  <div class="metric-card"><span>Media files</span><strong>{{ diagnostics.media_files }}</strong><small>{{ diagnostics.media_size | human_bytes }}</small></div>
+  <div class="metric-card"><span>Database</span><strong>{{ diagnostics.database_size | human_bytes }}</strong></div>
+  <div class="metric-card"><span>Free storage</span><strong>{{ diagnostics.free_space | human_bytes }}</strong></div>
+</div>
+
+<section class="panel">
+  <h2>Application state</h2>
+  <dl class="metadata-list">
+    <div><dt>Version</dt><dd>{{ diagnostics.version }}</dd></div>
+    <div><dt>Instagram session</dt><dd>{% if diagnostics.session.configured %}@{{ diagnostics.session.username }}{% else %}Not configured{% endif %}</dd></div>
+    <div><dt>Session validated</dt><dd>{{ diagnostics.session.last_validated_at | datetime }}</dd></div>
+    <div><dt>Next scheduled sync</dt><dd>{{ diagnostics.next_scheduled_sync | datetime }}</dd></div>
+  </dl>
+</section>
+
+<section class="panel">
+  <div class="panel-heading"><div><h2>Recent errors</h2><p>The latest synchronization errors across all runs.</p></div></div>
+  {% if diagnostics.recent_errors %}
+  <div class="error-list">
+    {% for error in diagnostics.recent_errors %}
+    <div class="error-row">
+      <div><strong>Run #{{ error.run_id }}{% if error.shortcode %} · {{ error.shortcode }}{% endif %}</strong><time>{{ error.occurred_at | datetime }}</time></div>
+      <p>{{ error.message }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">No synchronization errors have been recorded.</p>{% endif %}
+</section>
+{% endblock %}

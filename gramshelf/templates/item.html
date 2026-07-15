@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}@{{ item.author }} · GramShelf{% endblock %}
+{% block content %}
+<div class="back-row"><a href="{{ url_for('timeline') }}">← Back to timeline</a></div>
+<article class="item-detail">
+  <header class="item-header">
+    <div>
+      <div class="eyebrow">{{ item.media_type }} · {{ item.media | length }} file{% if item.media | length != 1 %}s{% endif %}</div>
+      <h1>@{{ item.author }}</h1>
+      <p>Published {{ item.published_at | datetime }}</p>
+    </div>
+    <a class="button button-secondary" href="{{ item.instagram_url }}" target="_blank" rel="noopener noreferrer">View on Instagram</a>
+  </header>
+
+  <div class="detail-gallery detail-gallery-{{ item.media | length }}">
+    {% for media in item.media %}
+    <figure class="detail-media">
+      {% if media.kind == 'video' %}
+      <video src="{{ url_for('media_file', path=media.relative_path) }}" controls playsinline preload="metadata"></video>
+      {% else %}
+      <img src="{{ url_for('media_file', path=media.relative_path) }}" alt="Media {{ loop.index }} from @{{ item.author }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}">
+      {% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+
+  <section class="caption-panel">
+    <h2>Caption</h2>
+    {% if item.caption %}<p class="caption-text">{{ item.caption }}</p>{% else %}<p class="muted">No caption was available.</p>{% endif %}
+    <dl class="metadata-list">
+      <div><dt>Shortcode</dt><dd>{{ item.shortcode }}</dd></div>
+      <div><dt>Downloaded</dt><dd>{{ item.downloaded_at | datetime }}</dd></div>
+      <div><dt>Original URL</dt><dd><a href="{{ item.instagram_url }}" target="_blank" rel="noopener noreferrer">{{ item.instagram_url }}</a></dd></div>
+    </dl>
+  </section>
+</article>
+{% endblock %}

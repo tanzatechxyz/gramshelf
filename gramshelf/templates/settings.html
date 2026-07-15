@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Settings · GramShelf{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div class="eyebrow">Configuration</div>
+  <h1>Settings</h1>
+  <p>Instagram access and synchronization options.</p>
+</section>
+
+<div class="settings-grid">
+  <section class="panel panel-wide">
+    <div class="panel-heading">
+      <div>
+        <h2>Instagram session</h2>
+        <p>GramShelf uses an existing Instaloader session and never stores your Instagram password.</p>
+      </div>
+      {% if settings.session_configured %}<span class="status-pill {% if settings.session_last_error %}status-error{% else %}status-success{% endif %}">{% if settings.session_last_error %}Needs attention{% else %}Configured{% endif %}</span>{% else %}<span class="status-pill status-never_run">Not configured</span>{% endif %}
+    </div>
+
+    {% if settings.session_configured %}
+    <dl class="metadata-list compact-list">
+      <div><dt>Account</dt><dd>@{{ settings.instagram_username }}</dd></div>
+      <div><dt>Last validated</dt><dd>{{ settings.session_last_validated_at | datetime }}</dd></div>
+    </dl>
+    {% if settings.session_last_error %}<div class="flash flash-error">{{ settings.session_last_error }}</div>{% endif %}
+    <div class="button-row">
+      <form action="{{ url_for('session_validate_web') }}" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="button button-secondary" type="submit">Validate session</button>
+      </form>
+      <form action="{{ url_for('session_remove_web') }}" method="post" data-confirm="Remove the Instagram session? Your downloaded archive will be kept.">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="button button-danger" type="submit">Remove session</button>
+      </form>
+    </div>
+    <hr>
+    <h3>Replace session</h3>
+    {% else %}
+    <div class="callout">
+      <strong>Create a session on a trusted computer</strong>
+      <p>Run <code>instaloader --login YOUR_USERNAME</code>, complete Instagram’s login prompts, then upload the generated <code>session-YOUR_USERNAME</code> file here.</p>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('session_upload_web') }}" method="post" enctype="multipart/form-data" class="inline-form session-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>
+        <span>Instagram username</span>
+        <input type="text" name="username" value="{{ settings.instagram_username }}" placeholder="your_username" autocomplete="off" required>
+      </label>
+      <label class="file-label">
+        <span>Instaloader session file</span>
+        <input type="file" name="session_file" accept=".json,.txt,application/octet-stream" required>
+      </label>
+      <button class="button button-primary" type="submit">Upload and validate</button>
+    </form>
+    <p class="field-help">Only upload a session file you created yourself. Validation contacts Instagram and may take a few seconds.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2>Schedule</h2><p>Run one conservative in-process synchronization job.</p></div>
+    </div>
+    <form action="{{ url_for('settings_update_web') }}" method="post" class="stacked-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label class="toggle-label">
+        <input type="checkbox" name="sync_enabled" {% if settings.sync_enabled %}checked{% endif %}>
+        <span><strong>Automatic synchronization</strong><small>Check for newly Saved posts on the interval below.</small></span>
+      </label>
+      <label>
+        Interval in minutes
+        <input type="number" name="sync_interval_minutes" value="{{ settings.sync_interval_minutes }}" min="15" max="10080" required>
+        <span class="field-help">Default: 720 minutes (12 hours). Avoid aggressive schedules.</span>
+      </label>
+      <label>
+        Stop after consecutive known items
+        <input type="number" name="stop_after_known" value="{{ settings.stop_after_known }}" min="1" max="50" required>
+        <span class="field-help">After the first full import, stop scanning once this many already-archived items appear in a row.</span>
+      </label>
+      <button class="button button-primary" type="submit">Save schedule</button>
+    </form>
+    <p class="next-run">Next run: <strong>{{ settings.next_scheduled_sync | datetime }}</strong></p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2>HTTP API</h2><p>Use this token as <code>Authorization: Bearer …</code>.</p></div>
+    </div>
+    <div class="token-box">
+      <code data-secret-value>{{ settings.api_token }}</code>
+      <button class="button button-secondary button-small" type="button" data-copy-secret>Copy</button>
+    </div>
+    <p class="field-help">Treat this token like a password. It grants administrator-level API access.</p>
+    <a class="button button-secondary" href="{{ url_for('api_docs') }}">Open interactive API docs</a>
+  </section>
+</div>
+{% endblock %}

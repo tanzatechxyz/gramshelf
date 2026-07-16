@@ -836,7 +836,12 @@ def create_app(
         item = database.get_item(item_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Archived item not found")
-        return item_detail(request, item)
+        neighbors = database.get_item_neighbors(item_id)
+        return {
+            **item_detail(request, item),
+            "previous_item_id": neighbors["previous_id"],
+            "next_item_id": neighbors["next_id"],
+        }
 
     @app.get(
         "/api/v1/instagram/session",

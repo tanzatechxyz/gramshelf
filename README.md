@@ -22,6 +22,15 @@ It is designed for a single Docker container on a home server such as TrueNAS SC
 
 GramShelf intentionally has one administrator, one Instagram account, SQLite, and one application process. It does not mirror Instagram collections, delete archived posts when you unsave them, or attempt to bypass Instagram restrictions.
 
+## Android client
+
+An Android 8.0+ dark-mode client is available for browsing, searching, viewing screen-filling media, navigating adjacent posts, checking status, and starting a synchronization against your self-hosted server.
+
+- [Download the Android v0.2.0 APK](https://github.com/tanzatechxyz/gramshelf/releases/tag/android-v0.2.0)
+- [Android setup, scope, security, and build notes](android/README.md)
+
+The first release intentionally keeps Instagram session management and archive maintenance in the web UI.
+
 ## Quick start with Docker Compose
 
 1. Create writable persistent folders. The optional `import` folder is a read-only source for a previous Instaloader archive. The image runs as UID/GID `568` by default (the common TrueNAS Apps user):

@@ -116,6 +116,11 @@ def test_item_page_navigates_in_download_order(client, app) -> None:
     assert f'href="http://testserver/items/{older_id}" rel="next"' in page.text
     assert "View on Instagram" in page.text
 
+    api_item = client.get(f"/api/v1/items/{middle_id}")
+    assert api_item.status_code == 200
+    assert api_item.json()["previous_item_id"] == newer_id
+    assert api_item.json()["next_item_id"] == older_id
+
     timeline = client.get("/timeline")
     assert "newest downloads first" in timeline.text
     assert timeline.text.index("NEWER") < timeline.text.index("MIDDLE")

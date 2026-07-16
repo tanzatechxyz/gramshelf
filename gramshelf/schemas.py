@@ -45,6 +45,8 @@ class ItemOut(BaseModel):
     cover_path: str | None
     cover_url: str | None
     media: list[MediaOut]
+    previous_item_id: int | None = None
+    next_item_id: int | None = None
 
 
 class ItemListOut(BaseModel):

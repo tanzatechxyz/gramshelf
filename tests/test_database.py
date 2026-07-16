@@ -5,7 +5,14 @@ from pathlib import Path
 from gramshelf.database import Database
 
 
-def add_item(database: Database, shortcode: str, author: str, published_at: str, media_type: str = "image") -> int:
+def add_item(
+    database: Database,
+    shortcode: str,
+    author: str,
+    published_at: str,
+    media_type: str = "image",
+    downloaded_at: str = "2026-07-15T12:00:00+00:00",
+) -> int:
     relative = f"{shortcode}/{shortcode}.jpg"
     return database.insert_item(
         {
@@ -14,7 +21,7 @@ def add_item(database: Database, shortcode: str, author: str, published_at: str,
             "author": author,
             "caption": f"Caption for {shortcode}",
             "published_at": published_at,
-            "downloaded_at": "2026-07-15T12:00:00+00:00",
+            "downloaded_at": downloaded_at,
             "media_type": media_type,
             "cover_path": relative,
         },
@@ -22,11 +29,24 @@ def add_item(database: Database, shortcode: str, author: str, published_at: str,
     )
 
 
-def test_items_are_chronological_and_filterable(tmp_path: Path) -> None:
+def test_items_are_ordered_by_download_and_filterable(tmp_path: Path) -> None:
     database = Database(tmp_path / "db.sqlite3")
     database.initialize()
-    older_id = add_item(database, "OLD1", "alice", "2024-01-01T00:00:00+00:00")
-    newer_id = add_item(database, "NEW2", "bob", "2025-02-01T00:00:00+00:00", "carousel")
+    older_id = add_item(
+        database,
+        "OLD1",
+        "alice",
+        "2025-02-01T00:00:00+00:00",
+        downloaded_at="2026-01-01T00:00:00+00:00",
+    )
+    newer_id = add_item(
+        database,
+        "NEW2",
+        "bob",
+        "2024-01-01T00:00:00+00:00",
+        "carousel",
+        downloaded_at="2026-02-01T00:00:00+00:00",
+    )
 
     items, total = database.list_items()
     assert total == 2
@@ -46,9 +66,27 @@ def test_items_are_chronological_and_filterable(tmp_path: Path) -> None:
 def test_item_neighbors_follow_timeline_order(tmp_path: Path) -> None:
     database = Database(tmp_path / "db.sqlite3")
     database.initialize()
-    older_id = add_item(database, "OLDER", "alice", "2024-01-01T00:00:00+00:00")
-    middle_id = add_item(database, "MIDDLE", "alice", "2025-01-01T00:00:00+00:00")
-    newer_id = add_item(database, "NEWER", "alice", "2026-01-01T00:00:00+00:00")
+    older_id = add_item(
+        database,
+        "OLDER",
+        "alice",
+        "2026-01-01T00:00:00+00:00",
+        downloaded_at="2024-01-01T00:00:00+00:00",
+    )
+    middle_id = add_item(
+        database,
+        "MIDDLE",
+        "alice",
+        "2025-01-01T00:00:00+00:00",
+        downloaded_at="2025-01-01T00:00:00+00:00",
+    )
+    newer_id = add_item(
+        database,
+        "NEWER",
+        "alice",
+        "2024-01-01T00:00:00+00:00",
+        downloaded_at="2026-01-01T00:00:00+00:00",
+    )
 
     assert database.get_item_neighbors(newer_id) == {
         "previous_id": None,

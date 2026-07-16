@@ -5,7 +5,7 @@
   <div>
     <div class="eyebrow">Archive</div>
     <h1>Saved timeline</h1>
-    <p>{{ total }} archived item{% if total != 1 %}s{% endif %}, newest publication first.</p>
+    <p>{{ total }} archived item{% if total != 1 %}s{% endif %}, newest downloads first.</p>
   </div>
   <div class="button-row">
     {% if sync_status.running %}
@@ -48,11 +48,11 @@
     </select>
   </label>
   <label>
-    <span>From</span>
+    <span>Published from</span>
     <input type="date" name="date_from" value="{{ filters.date_from }}">
   </label>
   <label>
-    <span>To</span>
+    <span>Published to</span>
     <input type="date" name="date_to" value="{{ filters.date_to }}">
   </label>
   <div class="filter-actions">
@@ -78,7 +78,7 @@
       <span class="media-badge">{{ item.media_type }}{% if item.media_count > 1 %} · {{ item.media_count }}{% endif %}</span>
     </a>
     <div class="timeline-card-body">
-      <div class="card-meta"><strong>@{{ item.author }}</strong><time datetime="{{ item.published_at }}">{{ item.published_at | datetime }}</time></div>
+      <div class="card-meta"><strong>@{{ item.author }}</strong><time datetime="{{ item.downloaded_at }}">Downloaded {{ item.downloaded_at | datetime }}</time></div>
       {% if item.caption %}<p>{{ item.caption | excerpt }}</p>{% else %}<p class="muted">No caption</p>{% endif %}
     </div>
   </article>

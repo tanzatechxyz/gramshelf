@@ -102,6 +102,7 @@ class Database:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_items_published_at ON items(published_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_items_downloaded_at ON items(downloaded_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_items_author ON items(author);
                 CREATE INDEX IF NOT EXISTS idx_items_media_type ON items(media_type);
                 CREATE INDEX IF NOT EXISTS idx_sync_runs_started_at ON sync_runs(started_at DESC);
@@ -312,7 +313,7 @@ class Database:
                 LEFT JOIN media m ON m.item_id = i.id
                 {where_sql}
                 GROUP BY i.id
-                ORDER BY i.published_at DESC, i.id DESC
+                ORDER BY i.downloaded_at DESC, i.id DESC
                 LIMIT ? OFFSET ?
                 """,
                 [*parameters, limit, offset],
@@ -334,7 +335,7 @@ class Database:
         return item
 
     def get_item_neighbors(self, item_id: int) -> dict[str, int | None]:
-        """Return adjacent item IDs in the timeline's newest-first order."""
+        """Return adjacent item IDs in the timeline's newest-download-first order."""
         with self.connect() as connection:
             row = connection.execute(
                 """
@@ -342,8 +343,8 @@ class Database:
                 FROM (
                     SELECT
                         id,
-                        LAG(id) OVER (ORDER BY published_at DESC, id DESC) AS previous_id,
-                        LEAD(id) OVER (ORDER BY published_at DESC, id DESC) AS next_id
+                        LAG(id) OVER (ORDER BY downloaded_at DESC, id DESC) AS previous_id,
+                        LEAD(id) OVER (ORDER BY downloaded_at DESC, id DESC) AS next_id
                     FROM items
                 ) ordered_items
                 WHERE id = ?

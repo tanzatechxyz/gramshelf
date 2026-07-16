@@ -47,7 +47,7 @@ The administrator browser session is also accepted. JSON errors use FastAPI's st
 - `limit`: 1–200, default 50
 - `offset`: zero-based offset
 
-Items are always ordered by `published_at` descending. Media URLs in API responses remain authenticated and accept the same Bearer token or browser session.
+Items are always ordered by `downloaded_at` descending, with the newest archive downloads first. Media URLs in API responses remain authenticated and accept the same Bearer token or browser session.
 
 ## Settings example
 

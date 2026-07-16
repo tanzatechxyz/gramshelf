@@ -81,10 +81,10 @@ def test_timeline_search_and_item_api(client, app, config) -> None:
     assert client.get("/diagnostics").status_code == 200
 
 
-def test_item_page_navigates_in_timeline_order(client, app) -> None:
+def test_item_page_navigates_in_download_order(client, app) -> None:
     complete_setup(client, app)
 
-    def insert(shortcode: str, published_at: str) -> int:
+    def insert(shortcode: str, published_at: str, downloaded_at: str) -> int:
         relative_path = f"{shortcode}/{shortcode}.jpg"
         return app.state.database.insert_item(
             {
@@ -93,22 +93,33 @@ def test_item_page_navigates_in_timeline_order(client, app) -> None:
                 "author": "alice",
                 "caption": shortcode,
                 "published_at": published_at,
-                "downloaded_at": "2026-07-15T12:00:00+00:00",
+                "downloaded_at": downloaded_at,
                 "media_type": "image",
                 "cover_path": relative_path,
             },
             [{"position": 0, "kind": "image", "relative_path": relative_path}],
         )
 
-    older_id = insert("OLDER", "2024-01-01T00:00:00+00:00")
-    middle_id = insert("MIDDLE", "2025-01-01T00:00:00+00:00")
-    newer_id = insert("NEWER", "2026-01-01T00:00:00+00:00")
+    older_id = insert(
+        "OLDER", "2026-01-01T00:00:00+00:00", "2024-01-01T00:00:00+00:00"
+    )
+    middle_id = insert(
+        "MIDDLE", "2025-01-01T00:00:00+00:00", "2025-01-01T00:00:00+00:00"
+    )
+    newer_id = insert(
+        "NEWER", "2024-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00"
+    )
 
     page = client.get(f"/items/{middle_id}")
     assert page.status_code == 200
     assert f'href="http://testserver/items/{newer_id}" rel="prev"' in page.text
     assert f'href="http://testserver/items/{older_id}" rel="next"' in page.text
     assert "View on Instagram" in page.text
+
+    timeline = client.get("/timeline")
+    assert "newest downloads first" in timeline.text
+    assert timeline.text.index("NEWER") < timeline.text.index("MIDDLE")
+    assert 'datetime="2026-01-01T00:00:00+00:00"' in timeline.text
 
 
 def test_archive_scan_state_can_be_changed_from_settings(client, app) -> None:

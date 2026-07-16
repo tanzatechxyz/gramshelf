@@ -101,6 +101,8 @@ final class Models {
         final String downloadedAt;
         final String mediaType;
         final List<Media> media;
+        final Integer previousItemId;
+        final Integer nextItemId;
 
         ItemDetail(
                 int id,
@@ -111,7 +113,9 @@ final class Models {
                 String publishedAt,
                 String downloadedAt,
                 String mediaType,
-                List<Media> media
+                List<Media> media,
+                Integer previousItemId,
+                Integer nextItemId
         ) {
             this.id = id;
             this.shortcode = shortcode;
@@ -122,6 +126,8 @@ final class Models {
             this.downloadedAt = downloadedAt;
             this.mediaType = mediaType;
             this.media = media;
+            this.previousItemId = previousItemId;
+            this.nextItemId = nextItemId;
         }
 
         static ItemDetail fromJson(JSONObject json) throws JSONException {
@@ -139,7 +145,9 @@ final class Models {
                     json.getString("published_at"),
                     json.getString("downloaded_at"),
                     json.getString("media_type"),
-                    media
+                    media,
+                    nullableInteger(json, "previous_item_id"),
+                    nullableInteger(json, "next_item_id")
             );
         }
     }
@@ -170,5 +178,12 @@ final class Models {
         }
         String value = json.optString(key, "");
         return value.isBlank() ? null : value;
+    }
+
+    private static Integer nullableInteger(JSONObject json, String key) {
+        if (!json.has(key) || json.isNull(key)) {
+            return null;
+        }
+        return json.optInt(key);
     }
 }

@@ -24,9 +24,9 @@ GramShelf intentionally has one administrator, one Instagram account, SQLite, an
 
 ## Android client
 
-An Android 8.0+ client is available for browsing, searching, viewing media, checking status, and starting a synchronization against your self-hosted server.
+An Android 8.0+ dark-mode client is available for browsing, searching, viewing screen-filling media, navigating adjacent posts, checking status, and starting a synchronization against your self-hosted server.
 
-- [Download the installable APK](dist/gramshelf-android-v0.1.0.apk)
+- [Download the Android v0.2.0 APK](https://github.com/tanzatechxyz/gramshelf/releases/tag/android-v0.2.0)
 - [Android setup, scope, security, and build notes](android/README.md)
 
 The first release intentionally keeps Instagram session management and archive maintenance in the web UI.

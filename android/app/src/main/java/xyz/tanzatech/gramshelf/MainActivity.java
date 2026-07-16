@@ -62,7 +62,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().setStatusBarColor(Ui.GREEN_DARK);
         getWindow().setNavigationBarColor(Ui.PAPER);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        getWindow().getDecorView().setSystemUiVisibility(0);
         config = new ConfigStore(this);
         if (config.isConfigured()) {
             openConfiguredShelf();

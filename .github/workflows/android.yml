@@ -7,7 +7,7 @@ on:
       - "android/**"
       - ".github/workflows/android.yml"
   push:
-    branches: [main]
+    branches: [main, agent/android-client]
     paths:
       - "android/**"
       - ".github/workflows/android.yml"
@@ -31,9 +31,33 @@ jobs:
       - name: Verify and build
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug
       - name: Stage APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk GramShelf-android-debug.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk GramShelf-Android-v0.2.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: gramshelf-android-debug
-          path: android/GramShelf-android-debug.apk
+          name: gramshelf-android-v0.2.0
+          path: android/GramShelf-Android-v0.2.0.apk
           if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/agent/android-client'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gramshelf-android-v0.2.0
+      - name: Publish Android preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: android-v0.2.0
+          APK_NAME: GramShelf-Android-v0.2.0.apk
+        run: |
+          notes='Dark mode, screen-filling media, web-style post details, and Previous/Next archive navigation. This preview APK is debug-signed for sideloading on Android 8.0 and newer.'
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$RELEASE_TAG" --title "GramShelf Android v0.2.0" --notes "$notes" --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$APK_NAME" --target "$GITHUB_SHA" --title "GramShelf Android v0.2.0" --notes "$notes" --prerelease --repo "$GITHUB_REPOSITORY"
+          fi

@@ -18,14 +18,17 @@ import java.time.format.DateTimeParseException;
 import java.util.Locale;
 
 final class Ui {
-    static final int INK = Color.rgb(24, 33, 27);
-    static final int MUTED = Color.rgb(91, 99, 93);
-    static final int PAPER = Color.rgb(247, 244, 237);
-    static final int GREEN = Color.rgb(23, 107, 74);
-    static final int GREEN_DARK = Color.rgb(14, 78, 54);
-    static final int SAND = Color.rgb(232, 224, 210);
+    static final int INK = Color.rgb(238, 242, 239);
+    static final int MUTED = Color.rgb(169, 179, 172);
+    static final int PAPER = Color.rgb(13, 16, 14);
+    static final int SURFACE = Color.rgb(24, 29, 26);
+    static final int GREEN = Color.rgb(22, 112, 76);
+    static final int GREEN_DARK = Color.rgb(8, 49, 34);
+    static final int GREEN_SOFT = Color.rgb(159, 226, 194);
+    static final int SAND = Color.rgb(40, 49, 43);
+    static final int BORDER = Color.rgb(54, 65, 58);
     static final int WHITE = Color.WHITE;
-    static final int ERROR = Color.rgb(154, 45, 36);
+    static final int ERROR = Color.rgb(255, 138, 128);
 
     private Ui() {
     }
@@ -50,7 +53,7 @@ final class Ui {
     }
 
     static TextView badge(Context context, String value) {
-        TextView view = text(context, value.toUpperCase(Locale.ROOT), 11, GREEN_DARK);
+        TextView view = text(context, value.toUpperCase(Locale.ROOT), 11, GREEN_SOFT);
         view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         view.setGravity(Gravity.CENTER);
         view.setPadding(dp(context, 10), dp(context, 5), dp(context, 10), dp(context, 5));
@@ -64,7 +67,7 @@ final class Ui {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16));
-        card.setBackground(roundRect(WHITE, 18, 1, Color.rgb(225, 220, 210), context));
+        card.setBackground(roundRect(SURFACE, 18, 1, BORDER, context));
         card.setElevation(dp(context, 2));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -91,7 +94,7 @@ final class Ui {
         Button button = new Button(context);
         button.setText(label);
         button.setAllCaps(false);
-        button.setTextColor(GREEN_DARK);
+        button.setTextColor(GREEN_SOFT);
         button.setTextSize(14);
         button.setBackgroundTintList(ColorStateList.valueOf(SAND));
         button.setMinHeight(dp(context, 44));

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="paper">#F7F4ED</color>
+    <color name="paper">#0D100E</color>
     <color name="green">#176B4A</color>
-    <color name="green_dark">#0E4E36</color>
+    <color name="green_dark">#083122</color>
 </resources>

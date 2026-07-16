@@ -20,6 +20,7 @@ import java.util.Map;
 final class ApiClient {
     private static final int JSON_LIMIT_BYTES = 4 * 1024 * 1024;
     private static final int IMAGE_LIMIT_BYTES = 30 * 1024 * 1024;
+    private static final String USER_AGENT = "GramShelf-Android/0.2.0";
 
     private final String baseUrl;
     private final String token;
@@ -100,7 +101,7 @@ final class ApiClient {
         verifiedMediaUrl(url);
         Map<String, String> headers = new HashMap<>();
         headers.put("Authorization", "Bearer " + token);
-        headers.put("User-Agent", "GramShelf-Android/0.1.0");
+        headers.put("User-Agent", USER_AGENT);
         return headers;
     }
 
@@ -137,7 +138,7 @@ final class ApiClient {
         connection.setInstanceFollowRedirects(false);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Authorization", "Bearer " + token);
-        connection.setRequestProperty("User-Agent", "GramShelf-Android/0.1.0");
+        connection.setRequestProperty("User-Agent", USER_AGENT);
         return connection;
     }
 
